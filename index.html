@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Lilita+One&display=swap">
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <style>
 /* Layout: ring board on the left, turn panel on the right; turns play on a full-screen stage on every phone */
 :root {
@@ -365,6 +366,11 @@ const conns = new Set();  // host: guest connections
 let S = null;             // host: full game state; guest: what the host sent
 let everConnected = false;
 let retryTimer = 0;
+let link = null;           // guest: 'peer' (direct) or 'relay' (backup)
+let fallbackTimer = 0, giveUpTimer = 0, helloIv = 0, beatIv = 0, lastHostMsg = 0;
+const relayConns = new Map(); // host: relay sender id -> connection-like object
+const hostSess = Math.random().toString(36).slice(2, 8);
+let stateSeq = 0, lastSeq = { hs: null, sv: 0 };
 let lastRemaining = 0, lastRecv = 0;
 let homeMsg = '', homeErr = false;
 let muted = false;
@@ -745,15 +751,80 @@ function publicState(pid) {
   return v;
 }
 function broadcast() {
-  const rem = remaining();
+  const rem = remaining(), sv = ++stateSeq;
   conns.forEach(c => {
-    if (c.open && c.pid) { try { c.send({ t: 'state', state: publicState(c.pid), remainingMs: rem }); } catch (e) {} }
+    if (c.open && c.pid) { try { c.send({ t: 'state', state: publicState(c.pid), remainingMs: rem, hs: hostSess, sv }); } catch (e) {} }
   });
   LS && setItem(LS, 'sps-host', S);
   render();
 }
 
+/* ================= RELAY =================
+   Some mobile networks (often 5G) block the direct phone-to-phone link. As a backup, messages go through
+   public MQTT relays over secure websockets, on standard ports. All relays are used at once; whichever
+   delivers a message first wins and the copies are dropped. */
+const RELAYS = [
+  ['wss://public.cloud.shiftr.io:443', { username: 'public', password: 'public' }],
+  ['wss://broker.hivemq.com:8884/mqtt', {}],
+  ['wss://broker.emqx.io:8084/mqtt', {}]
+];
+const RELAY_ROOT = 'spade-speak-v1/';
+const relay = { clients: [], seq: 0, sess: '', seen: new Map() };
+function roomTopic(rest) { return 'room/' + roomCode.toLowerCase() + '/' + rest; }
+function relayStart(listen, onMsg) {
+  relayStop();
+  if (typeof mqtt === 'undefined') return;
+  relay.sess = Math.random().toString(36).slice(2, 8);
+  const topic = RELAY_ROOT + listen;
+  relay.clients = RELAYS.map(([url, o]) => {
+    let c;
+    try { c = mqtt.connect(url, { ...o, clientId: 'sps-' + me + '-' + Math.random().toString(36).slice(2, 6), connectTimeout: 10000, reconnectPeriod: 4000, keepalive: 30 }); }
+    catch (e) { return null; }
+    c.on('connect', () => c.subscribe(topic));
+    c.on('message', (t, buf) => {
+      let env; try { env = JSON.parse(buf.toString()); } catch (e) { return; }
+      if (!env || !env.id || env.f === me || relay.seen.has(env.id)) return;
+      relay.seen.set(env.id, 1);
+      if (relay.seen.size > 600) relay.seen.delete(relay.seen.keys().next().value);
+      onMsg(env.m, String(env.f || ''));
+    });
+    c.on('error', () => {});
+    return c;
+  }).filter(Boolean);
+}
+function relaySend(to, m) {
+  const env = JSON.stringify({ f: me, id: me + '.' + relay.sess + '.' + (++relay.seq), m });
+  relay.clients.forEach(c => { if (c.connected) { try { c.publish(RELAY_ROOT + to, env); } catch (e) {} } });
+}
+function relayStop() {
+  relay.clients.forEach(c => { try { c.end(true); } catch (e) {} });
+  relay.clients = []; relay.seen.clear();
+}
+
+function startHostRelay() {
+  relayConns.clear();
+  relayStart(roomTopic('host'), (m, f) => {
+    if (role !== 'host' || !m || !f) return;
+    let c = relayConns.get(f);
+    if (!c) {
+      if (m.t !== 'hello') return;
+      c = { relay: true, from: f, pid: null, open: true, seen: 0, send: x => relaySend(roomTopic('g/' + f), x), close() { this.open = false; } };
+      relayConns.set(f, c);
+    }
+    c.seen = Date.now();
+    if (m.t !== 'ping') hostReceive(c, m);
+  });
+  clearInterval(beatIv);
+  beatIv = setInterval(() => {
+    relayConns.forEach((c, f) => {
+      if (Date.now() - c.seen > 20000) { relayConns.delete(f); c.open = false; hostDrop(c); }
+      else if (conns.has(c)) c.send({ t: 'ping' });
+    });
+  }, 5000);
+}
+
 function openHostPeer(attempt = 0) {
+  if (typeof Peer === 'undefined') { setNet('Hosting room ' + roomCode + ' · backup link', 'ok'); return; }
   setNet('Opening room…', 'warn');
   peer = new Peer(peerIdFor(roomCode), { debug: 1 });
   peer.on('open', () => { setNet('Hosting room ' + roomCode, 'ok'); render(); });
@@ -809,33 +880,79 @@ function normalizeHost() {
 
 /* ================= GUEST ================= */
 function joinRoom(code) {
-  role = 'guest'; roomCode = code; S = null; everConnected = false;
+  role = 'guest'; roomCode = code; S = null; everConnected = false; link = null; lastSeq = { hs: null, sv: 0 };
   homeMsg = 'Connecting to room ' + code + '…'; homeErr = false; render();
   setNet('Connecting…', 'warn');
+  /* the backup relay warms up straight away, but is only used if the direct link hasn't opened in a few seconds */
+  relayStart(roomTopic('g/' + me), guestRelayMsg);
+  clearTimeout(fallbackTimer); fallbackTimer = setTimeout(useRelay, 4000);
+  clearTimeout(giveUpTimer);
+  giveUpTimer = setTimeout(() => {
+    if (role === 'guest' && !everConnected) leave(`Couldn't connect to room ${code}. Check the code, and that the host still has the game open.`);
+  }, 25000);
+  clearInterval(beatIv);
+  beatIv = setInterval(() => {
+    if (role !== 'guest' || link !== 'relay') return;
+    hostConn.send({ t: 'ping' });
+    if (Date.now() - lastHostMsg > 16000) { setNet('Lost the host. Reconnecting…', 'warn'); hostConn.send({ t: 'hello', cid: me, name: myName }); }
+  }, 5000);
+  if (typeof Peer === 'undefined') { useRelay(); return; }
   peer = new Peer({ debug: 1 });
   peer.on('open', connectHost);
   peer.on('disconnected', () => { setTimeout(() => { try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) {} }, 1500); });
   peer.on('error', e => {
+    if (link === 'relay') return;
+    useRelay();
     if (e.type === 'peer-unavailable') {
-      if (!everConnected) { leave(`Couldn't find room ${code}. Check the code, and that the host still has the game open.`); return; }
-      setNet('Host not reachable. Retrying…', 'warn'); retryLater();
+      setNet(everConnected ? 'Host not reachable. Retrying…' : 'Trying another way to reach the room…', 'warn'); retryLater();
     } else { setNet('Connection problem (' + e.type + '). Retrying…', 'warn'); retryLater(); }
   });
+}
+function linked(how) {
+  everConnected = true; link = how; clearTimeout(giveUpTimer);
+  setNet('In room ' + roomCode + (how === 'relay' ? ' · backup link' : ''), 'ok');
+  LS && setItem(LS, 'sps-guest', { code: roomCode });
+}
+/* say hello through the relays until the host answers there (or the direct link opens) */
+function useRelay() {
+  if (role !== 'guest' || link === 'peer' || helloIv) return;
+  const hello = () => {
+    if (role !== 'guest' || link) { clearInterval(helloIv); helloIv = 0; return; }
+    relaySend(roomTopic('host'), { t: 'hello', cid: me, name: myName });
+  };
+  helloIv = setInterval(hello, 2000); hello();
+}
+function relayHostConn() { return { relay: true, open: true, send: m => relaySend(roomTopic('host'), m) }; }
+function guestRelayMsg(m) {
+  if (role !== 'guest' || !m) return;
+  lastHostMsg = Date.now();
+  if (m.t !== 'state') return;
+  if (link !== 'peer' && link !== 'relay') { hostConn = relayHostConn(); linked('relay'); }
+  else if (link === 'relay') setNet('In room ' + roomCode + ' · backup link', 'ok');
+  if (link === 'relay') guestState(m);
+}
+function guestState(m) {
+  if (!m || m.t !== 'state') return;
+  if (m.hs === lastSeq.hs && m.sv <= lastSeq.sv) return;
+  lastSeq = { hs: m.hs, sv: m.sv };
+  S = m.state; lastRemaining = m.remainingMs || 0; lastRecv = performance.now(); render();
 }
 function connectHost() {
   if (!peer || peer.destroyed || role !== 'guest') return;
   const c = peer.connect(peerIdFor(roomCode), { reliable: true });
-  hostConn = c;
+  if (!link) hostConn = c;
   c.on('open', () => {
-    everConnected = true;
+    hostConn = c;
     c.send({ t: 'hello', cid: me, name: myName });
-    setNet('In room ' + roomCode, 'ok');
-    LS && setItem(LS, 'sps-guest', { code: roomCode });
+    linked('peer');
   });
-  c.on('data', m => {
-    if (m && m.t === 'state') { S = m.state; lastRemaining = m.remainingMs || 0; lastRecv = performance.now(); render(); }
+  c.on('data', m => { if (link === 'peer' && hostConn === c) guestState(m); });
+  c.on('close', () => {
+    if (role === 'guest' && hostConn === c) {
+      link = null; hostConn = null;
+      setNet('Lost the host. Reconnecting…', 'warn'); retryLater(); useRelay();
+    }
   });
-  c.on('close', () => { if (role === 'guest' && hostConn === c) { setNet('Lost the host. Reconnecting…', 'warn'); retryLater(); } });
 }
 function retryLater() {
   clearTimeout(retryTimer);
@@ -860,7 +977,9 @@ function msLeft(v) {
 }
 function leave(msg) {
   clearTimeout(retryTimer); hostStopTimer();
+  clearTimeout(fallbackTimer); clearTimeout(giveUpTimer); clearInterval(helloIv); clearInterval(beatIv); helloIv = 0;
   try { peer && peer.destroy(); } catch (e) {}
+  relayStop(); relayConns.clear(); link = null;
   peer = null; hostConn = null; conns.clear();
   if (role === 'host') LS && setItem(LS, 'sps-host', null);
   if (role === 'guest') LS && setItem(LS, 'sps-guest', null);
@@ -1365,9 +1484,9 @@ function openRules() {
 const UI = {
   create() {
     if (!readName()) return;
-    if (typeof Peer === 'undefined') { homeMsg = "Couldn't load the connection library. Check your internet and reload."; homeErr = true; renderHome(); return; }
+    if (typeof Peer === 'undefined' && typeof mqtt === 'undefined') { homeMsg = "Couldn't load the connection library. Check your internet and reload."; homeErr = true; renderHome(); return; }
     role = 'host'; roomCode = newCode(); S = newLobby(roomCode);
-    openHostPeer(); broadcast();
+    openHostPeer(); startHostRelay(); broadcast();
   },
   resumeHost() {
     const g = LS && getItem(LS, 'sps-host'); if (!g) return;
@@ -1375,14 +1494,14 @@ const UI = {
     role = 'host'; S = g; roomCode = g.code; S.hostId = me;
     const hp = S.players.find(p => p.id === me) || S.players[0];
     if (hp) { hp.id = me; hp.name = myName; }
-    normalizeHost(); openHostPeer(); broadcast();
+    normalizeHost(); openHostPeer(); startHostRelay(); broadcast();
   },
   forgetHost() { LS && setItem(LS, 'sps-host', null); renderHome(); },
   join() {
     if (!readName()) return;
     const code = ($('#joinCode').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (code.length !== 5) { homeMsg = 'Room codes are 5 letters and numbers.'; homeErr = true; renderHome(); return; }
-    if (typeof Peer === 'undefined') { homeMsg = "Couldn't load the connection library. Check your internet and reload."; homeErr = true; renderHome(); return; }
+    if (typeof Peer === 'undefined' && typeof mqtt === 'undefined') { homeMsg = "Couldn't load the connection library. Check your internet and reload."; homeErr = true; renderHome(); return; }
     joinRoom(code);
   },
   leave(b) {
@@ -1440,7 +1559,7 @@ window.addEventListener('beforeunload', e => { if (role === 'host' && S && S.pha
   const savedGuest = LS && getItem(LS, 'sps-guest');
   const hashCode = (location.hash || '').replace('#', '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   render();
-  if (myName && savedGuest && savedGuest.code && (!hashCode || hashCode === savedGuest.code) && typeof Peer !== 'undefined') joinRoom(savedGuest.code);
+  if (myName && savedGuest && savedGuest.code && (!hashCode || hashCode === savedGuest.code) && (typeof Peer !== 'undefined' || typeof mqtt !== 'undefined')) joinRoom(savedGuest.code);
 })();
 </script>
 </body>
