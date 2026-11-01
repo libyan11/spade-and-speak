@@ -128,8 +128,10 @@ input[type="text"] { font: inherit; padding: .62em .8em; border-radius: 12px; bo
 .seg-finish { fill: var(--finish); }
 .spade circle { fill: var(--spade-badge); stroke: #fff; stroke-width: 1.2; }
 .spade text { fill: #fff; font-size: 11px; font-family: var(--f-body); }
-.fin-glyph { fill: var(--plate); font-size: 12px; }
-.divider { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; }
+.fin-glyph { fill: var(--plate); font-size: 11px; }
+.seg-lbl { font-family: var(--f-body); font-weight: 800; fill: #fff; pointer-events: none; }
+.seg-lbl.lbl-world { fill: #2B2104; }
+.seg-lbl.lbl-finish { fill: var(--plate); }.divider { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; }
 .ring-label { fill: var(--muted); font-family: var(--f-body); font-weight: 800; font-size: 8.5px; letter-spacing: 1.3px; }
 .tok { transition: transform .26s cubic-bezier(.3, 1.5, .5, 1); }
 .tok .body { stroke: #fff; stroke-width: 2.2; }
@@ -145,6 +147,7 @@ input[type="text"] { font: inherit; padding: .62em .8em; border-radius: 12px; bo
 .legend li { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
 .legend .pill { font-size: .8rem; }
 .legend .spade-key { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--spade-badge); color: #fff; font-size: .8rem; }
+.legend .spin-key { width: 22px; height: 22px; display: block; }
 
 /* Game */
 .game { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 32px; align-items: start; }
@@ -239,6 +242,26 @@ button.rv { cursor: pointer; }
 .confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 60; }
 .confetti i { position: absolute; top: -20px; width: 10px; height: 16px; border-radius: 3px; animation: fall linear forwards; }
 @keyframes fall { to { transform: translateY(110vh) rotate(720deg); } }
+.wheel-wrap { position: relative; width: min(280px, 72vw); aspect-ratio: 1; margin-inline: auto; }
+.wheel-wrap svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.wheel-pin { fill: #FFD66B; stroke: var(--stage); stroke-width: 3; stroke-linejoin: round; }
+.wheel-lbl { font-family: var(--f-display); font-size: 24px; fill: #fff; }
+.spin-result { text-align: center; font-family: var(--f-display); font-size: clamp(3rem, 14vw, 5rem); line-height: 1; color: #FFD66B; }
+.spin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.spin-btn { background: var(--team); color: #fff; box-shadow: 0 4px 0 rgba(0, 0, 0, .35); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 12px 14px; }
+.spin-btn span { font-size: .85rem; font-weight: 600; opacity: .92; }
+.foul-banner { border-radius: 14px; padding: 12px 14px; background: rgba(255, 90, 99, .16); box-shadow: inset 0 0 0 1.5px #FF5A63; font-size: .95rem; }
+.foul-banner b { color: #FF8A8F; }
+.btn-foul { background: #D9363E; color: #fff; box-shadow: 0 4px 0 #9E1F26; }
+.btn-fair { background: var(--good); color: #fff; box-shadow: 0 4px 0 var(--good-deep); }
+.btn.picked { outline: 3px solid #FFD66B; outline-offset: 2px; }
+.rv-item { display: flex; flex-direction: column; gap: 6px; }
+.rv.flag { box-shadow: inset 0 0 0 2px #FF5A63; }
+.rv-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.rv-actions .btn { font-size: .8rem; padding: .4em .7em; border-radius: 10px; }
+.vote-box { border-radius: 18px; padding: 16px; background: var(--stage-line); display: flex; flex-direction: column; gap: 12px; box-shadow: inset 0 0 0 2px #FF5A63; }
+.vote-box h3 { font-size: 1.4rem; }
+.vote-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stage-status { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); right: max(12px, env(safe-area-inset-right, 0px)); z-index: 55; font-size: .8rem; font-weight: 700; background: var(--c-action); color: #fff; padding: 4px 10px; border-radius: 999px; }
 
 .modal { position: fixed; inset: 0; z-index: 80; background: rgba(10, 8, 30, .62); display: flex; padding: 16px; overflow-y: auto; }
@@ -301,6 +324,8 @@ const TEAM_COLORS = ['#E5197D', '#0B93CF', '#5EA813', '#F2701C', '#6A3FD1', '#8A
 const DEFAULT_NAMES = ['The Talkers', 'Word Nerds', 'Quick Lips', 'Clue Crew', 'Chatterboxes', 'Big Mouths'];
 const TURN_SECONDS = 30;
 const PEER_PREFIX = 'spade-speak-room-';
+const SPIN_VALUES = [1, -2, 2, -1, 1, -2, 2, -1];
+const SPIN_MS = 3200;
 
 const WORDS = {
   object: 'Toaster|Umbrella|Toothbrush|Ladder|Scissors|Pillow|Kettle|Hammer|Telescope|Backpack|Candle|Wallet|Sunglasses|Microwave|Keyboard|Helmet|Envelope|Trampoline|Calculator|Mirror|Saucepan|Padlock|Magnifying glass|Stapler|Wheelbarrow|Binoculars|Bicycle|Sofa|Hairdryer|Remote control|Teapot|Suitcase|Guitar|Piano|Violin|Compass|Thermometer|Chopsticks|Spatula|Doorbell|Fridge|Lamp|Crayon|Paintbrush|Skateboard|Tent|Bucket|Frying pan|Light bulb|Battery|Headphones|Trophy|Crown|Balloon|Kite|Anchor|Parachute|Sandal|Scarf|Glove|Necklace|Perfume|Sponge|Vacuum cleaner|Washing machine|Blender|Rolling pin|Whistle|Dice|Jigsaw puzzle|Wristwatch|Calendar|Passport|Fork|Toilet roll|Plaster|Hourglass|Pencil sharpener|Lawnmower|Coat hanger|Paperclip|Doormat|Ironing board|Tin opener|Postbox|Wheelchair|Microphone|Screwdriver|Lunchbox|Phone charger',
@@ -370,6 +395,8 @@ const sfx = {
   buzz: () => { tone(150, .75, 'sawtooth', .2); tone(156, .75, 'sawtooth', .16); },
   step: () => tone(540, .05, 'sine', .09),
   spade: () => [392, 523, 392, 659].forEach((fq, i) => tone(fq, .14, 'square', .08, i * .1)),
+  spinner: () => [523, 659, 784, 659].forEach((fq, i) => tone(fq, .12, 'triangle', .14, i * .09)),
+  flag: () => [700, 520, 700].forEach((fq, i) => tone(fq, .1, 'square', .09, i * .11)),
   win: () => [523, 659, 784, 1047, 784, 1047].forEach((fq, i) => tone(fq, .22, 'triangle', .2, i * .12))
 };
 function keepAwake() { try { navigator.wakeLock?.request('screen').catch(() => {}); } catch (e) {} }
@@ -378,25 +405,30 @@ function keepAwake() { try { navigator.wakeLock?.request('screen').catch(() => {
 function polar(r, deg) { const a = deg * Math.PI / 180; return [200 + r * Math.cos(a), 200 + r * Math.sin(a)]; }
 function buildSpaces(n) {
   const sp = [];
-  for (let i = 0; i < n; i++) sp.push({ cat: ORDER[i % 6], spade: i > 0 && i < n - 1 && i % 7 === 4 });
+  for (let i = 0; i < n; i++) {
+    const inner = i > 0 && i < n - 1;
+    sp.push({ cat: ORDER[i % 6], spade: inner && i % 7 === 4, spin: inner && i > 1 && i % 7 === 1 });
+  }
   return sp;
 }
+function spinBadge(r) {
+  return `<circle r="${r}" fill="#1E9B5A"/><path d="M0 0L0 ${-r}A${r} ${r} 0 0 1 ${r} 0ZM0 0L0 ${r}A${r} ${r} 0 0 1 ${-r} 0Z" fill="#D9363E"/><circle r="${r}" fill="none" stroke="#fff" stroke-width="1.2"/><circle r="${r * .22}" fill="#fff"/>`;
+}
 function boardSVG(spaces, withTokens) {
-  const n = spaces.length, step = 360 / n;
+  const n = spaces.length, step = 360 / n, fs = n <= 30 ? 8.6 : n <= 40 ? 7.6 : 6.8;
   let out = `<circle class="board-shadow" cx="200" cy="206" r="${R1 + 6}"/><circle class="plate" cx="200" cy="200" r="${R1 + 6}"/>`;
   spaces.forEach((s, i) => {
-    const a0 = -90 + i * step, a1 = a0 + step, fin = i === n - 1;
+    const a0 = -90 + i * step, a1 = a0 + step, mid = a0 + step / 2, fin = i === n - 1;
     const [x1, y1] = polar(R1, a0), [x2, y2] = polar(R1, a1), [x3, y3] = polar(R0, a1), [x4, y4] = polar(R0, a0);
     const label = i === 0 ? 'Start' : fin ? 'Finish' : `Space ${i}`;
-    out += `<path class="seg ${fin ? 'seg-finish' : 'seg-' + s.cat}" d="M${f1(x1)} ${f1(y1)}A${R1} ${R1} 0 0 1 ${f1(x2)} ${f1(y2)}L${f1(x3)} ${f1(y3)}A${R0} ${R0} 0 0 0 ${f1(x4)} ${f1(y4)}Z"><title>${label} · ${fin ? 'final challenge' : CAT[s.cat]}${s.spade ? ' · spade' : ''}</title></path>`;
-    if (s.spade) {
-      const [sx, sy] = polar(R1 - 13, a0 + step / 2);
-      out += `<g class="spade" transform="translate(${f1(sx)} ${f1(sy)})"><circle r="8.5"/><text y="4" text-anchor="middle">♠</text></g>`;
-    }
-    if (fin) {
-      const [fx, fy] = polar(R1 - 13, a0 + step / 2);
-      out += `<text class="fin-glyph" x="${f1(fx)}" y="${f1(fy + 4)}" text-anchor="middle">★</text>`;
-    }
+    out += `<path class="seg ${fin ? 'seg-finish' : 'seg-' + s.cat}" d="M${f1(x1)} ${f1(y1)}A${R1} ${R1} 0 0 1 ${f1(x2)} ${f1(y2)}L${f1(x3)} ${f1(y3)}A${R0} ${R0} 0 0 0 ${f1(x4)} ${f1(y4)}Z"><title>${label} · ${fin ? 'final challenge' : CAT[s.cat]}${s.spade ? ' · spade' : ''}${s.spin ? ' · spinner' : ''}</title></path>`;
+    /* category name runs outward from the inner edge; flipped on the left half so it never reads upside down */
+    const [lx, ly] = polar(R0 + 5, mid), flip = mid > 90;
+    out += `<text class="seg-lbl ${fin ? 'lbl-finish' : 'lbl-' + s.cat}" font-size="${fs}" dy=".35em" text-anchor="${flip ? 'end' : 'start'}" transform="translate(${f1(lx)} ${f1(ly)}) rotate(${f1(flip ? mid + 180 : mid)})">${fin ? 'Finish' : CAT[s.cat]}</text>`;
+    const [bx, by] = polar(R1 - 11, mid);
+    if (s.spade) out += `<g class="spade" transform="translate(${f1(bx)} ${f1(by)})"><circle r="8"/><text y="3.8" text-anchor="middle" font-size="10">♠</text></g>`;
+    if (s.spin) out += `<g class="spin-badge" transform="translate(${f1(bx)} ${f1(by)})">${spinBadge(7.5)}</g>`;
+    if (fin) out += `<text class="fin-glyph" x="${f1(bx)}" y="${f1(by + 4)}" text-anchor="middle">★</text>`;
   });
   const [dx1, dy1] = polar(R0 - 7, -90), [dx2, dy2] = polar(R1 + 5, -90);
   out += `<line class="divider" x1="${f1(dx1)}" y1="${f1(dy1)}" x2="${f1(dx2)}" y2="${f1(dy2)}"/>`;
@@ -406,7 +438,8 @@ function boardSVG(spaces, withTokens) {
 }
 function legendHTML() {
   return ORDER.map(c => `<li><span class="pill cat-${c}">${CAT[c]}</span></li>`).join('') +
-    `<li><span class="spade-key" aria-hidden="true">♠</span>Spade: everyone plays</li>`;
+    `<li><span class="spade-key" aria-hidden="true">♠</span>Spade: everyone plays</li>` +
+    `<li><svg class="spin-key" viewBox="-11 -11 22 22" aria-hidden="true">${spinBadge(10)}</svg>Spinner: move any team ±1 or ±2</li>`;
 }
 function updateTokens(v) {
   const g = document.getElementById('tokens');
@@ -424,7 +457,7 @@ function updateTokens(v) {
       g.appendChild(el);
     }
     const p = disp[i] ?? t.pos, grp = groups[p], k = grp.indexOf(i), c = grp.length;
-    const r = c === 1 ? 147 : 126 + k * (36 / (c - 1));
+    const r = c === 1 ? 161 : 128 + k * (36 / (c - 1));
     const tang = c > 2 ? ((k % 2) ? 1 : -1) * step * 0.22 : 0;
     const [x, y] = polar(r, -90 + (p + .5) * step + tang);
     const rad = c <= 2 ? base : c <= 4 ? Math.min(base, 7.4) : Math.min(base, 6.2);
@@ -438,11 +471,12 @@ function updateTokens(v) {
   });
 }
 function animateLocal(a) {
-  if (!a || a.to <= a.from) return;
+  if (!a || a.to === a.from) return;
+  const dir = a.to > a.from ? 1 : -1;
   disp[a.ti] = a.from; updateTokens(view());
   const iv = setInterval(() => {
-    disp[a.ti]++; sfx.step(); updateTokens(view());
-    if (disp[a.ti] >= a.to) { clearInterval(iv); delete disp[a.ti]; updateTokens(view()); }
+    disp[a.ti] += dir; sfx.step(); updateTokens(view());
+    if (disp[a.ti] === a.to) { clearInterval(iv); delete disp[a.ti]; updateTokens(view()); }
   }, 280);
 }
 
@@ -467,7 +501,7 @@ function newLobby(code) {
   return {
     phase: 'lobby', code, hostId: me, players: [{ id: me, name: myName, team: 0, online: true }],
     teamCount: 2, teamNames: DEFAULT_NAMES.slice(), len: 40, teams: [], spaces: [], cur: 0, decks: {},
-    turn: null, spade: null, last: null, after: null, anim: null, winner: null, finalCat: null
+    turn: null, spade: null, spinner: null, vote: null, last: null, after: null, anim: null, winner: null, finalCat: null
   };
 }
 function teamsReady() {
@@ -479,7 +513,7 @@ function teamsReady() {
 function startGame() {
   S.teams = Array.from({ length: S.teamCount }, (_, i) => ({ name: S.teamNames[i], color: TEAM_COLORS[i], pos: 0, desc: 0 }));
   S.spaces = buildSpaces(S.len);
-  Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+  Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, anim: null, winner: null, finalCat: null });
 }
 
 /* host timer */
@@ -513,7 +547,7 @@ function onTimeUp() {
 function endTurnAdvance() {
   S.teams[S.cur].desc++;
   S.cur = (S.cur + 1) % S.teams.length;
-  Object.assign(S, { phase: 'idle', turn: null, spade: null, after: null, finalCat: null });
+  Object.assign(S, { phase: 'idle', turn: null, spade: null, spinner: null, vote: null, after: null, finalCat: null });
   broadcast();
 }
 function runAfter() {
@@ -521,15 +555,30 @@ function runAfter() {
   if (S.after === 'spade') {
     S.spade = { cat: S.spaces[S.teams[S.cur].pos].cat, by: S.cur, card: null, descs: [], timeUp: false };
     S.phase = 'spade-intro'; S.after = null; broadcast();
+  } else if (S.after === 'spin') {
+    S.spinner = { by: S.cur, result: null, slice: null, id: null, at: 0 };
+    S.phase = 'spin'; S.after = null; broadcast();
   } else endTurnAdvance();
 }
 function moveTeam(ti, n) {
-  const t = S.teams[ti], from = t.pos, to = Math.min(S.len - 1, from + n);
+  const t = S.teams[ti], from = t.pos, to = Math.max(0, Math.min(S.len - 1, from + n));
   t.pos = to;
   S.anim = { ti, from, to, id: Date.now() + '-' + ti };
   S.phase = 'moving';
-  setTimeout(runAfter, Math.max(0, to - from) * 280 + 600);
+  setTimeout(runAfter, Math.abs(to - from) * 280 + 600);
   return { from, to };
+}
+function posLabel(p, v = S) { return p === 0 ? 'the start' : p === v.len - 1 ? 'the finish' : 'space ' + p; }
+
+/* foul votes: everyone online except the describer; more "foul" than "fair" removes the card, a tie keeps it */
+function voters() { return S.players.filter(x => x.online && x.id !== S.turn.describer); }
+function checkVote() { if (S.vote && voters().every(x => S.vote.votes[x.id])) resolveVote(); }
+function resolveVote() {
+  const r = S.turn.records[S.vote.i], vs = Object.values(S.vote.votes);
+  const foul = vs.filter(x => x === 'foul').length, fair = vs.length - foul;
+  if (foul > fair) { r.status = 'upheld'; r.ok = false; r.res = 'foul'; } else r.status = 'fair';
+  r.tally = { foul, fair };
+  S.vote = null;
 }
 
 function handleAct(pid, act, d) {
@@ -571,9 +620,52 @@ function handleAct(pid, act, d) {
     },
     got() {
       if (ph !== 'play' || !isD || tr.paused) return;
-      tr.records.push({ word: tr.card.word, res: 'correct', ok: true });
-      if (tr.mode === 'final') { hostStopTimer(); ht.onEnd = null; S.winner = S.cur; S.phase = 'win'; return; }
+      const fb = tr.card.foulBy || null;
+      tr.records.push({ word: tr.card.word, res: 'correct', ok: true, foulBy: fb, status: fb ? 'challenged' : null });
+      /* the final card goes to review too, so the other teams get a chance to challenge it */
+      if (tr.mode === 'final') { hostStopTimer(); ht.onEnd = null; tr.card = null; tr.parked = null; S.phase = 'review'; return; }
       tr.card = draw(tr.cat);
+    },
+    callFoul() {
+      if (ph !== 'play' || tr.paused || !tr.card || tr.card.foulBy) return;
+      if (p.team == null || p.team === S.cur) return;
+      tr.card.foulBy = pid;
+    },
+    challenge() {
+      const r = tr && tr.records[+d.i];
+      if (ph !== 'review' || !r || !r.ok || r.status || p.team == null || p.team === S.cur) return;
+      r.status = 'challenged'; r.foulBy = pid;
+    },
+    acceptFoul() {
+      const r = tr && tr.records[+d.i];
+      if (ph !== 'review' || !r || r.status !== 'challenged' || !(p.team === S.cur || host)) return;
+      r.status = 'upheld'; r.ok = false; r.res = 'foul';
+    },
+    dispute() {
+      const r = tr && tr.records[+d.i];
+      if (ph !== 'review' || !r || r.status !== 'challenged' || S.vote || !(p.team === S.cur || host)) return;
+      r.status = 'voting'; S.vote = { i: +d.i, votes: {} };
+      checkVote();
+    },
+    vote() {
+      if (ph !== 'review' || !S.vote || pid === tr.describer || !['foul', 'fair'].includes(d.choice)) return;
+      S.vote.votes[pid] = d.choice; checkVote();
+    },
+    endVote() { if (host && ph === 'review' && S.vote) resolveVote(); },
+    spin() {
+      const sp = S.spinner;
+      if (ph !== 'spin' || sp.result != null || !(p.team === sp.by || host)) return;
+      const k = Math.floor(Math.random() * SPIN_VALUES.length);
+      Object.assign(sp, { result: SPIN_VALUES[k], slice: k, id: Date.now() + '-' + k, at: Date.now() });
+    },
+    spinPick() {
+      const sp = S.spinner, ti = +d.i;
+      if (ph !== 'spin' || sp.result == null || Date.now() - sp.at < SPIN_MS - 600 || !(p.team === sp.by || host) || !S.teams[ti]) return;
+      const by = S.teams[sp.by], n = Math.abs(sp.result), { from, to } = moveTeam(ti, sp.result);
+      const whom = ti === sp.by ? 'themselves' : S.teams[ti].name;
+      S.after = 'next';
+      S.last = `Spinner: ${by.name} spun ${sp.result > 0 ? '+' : '−'}${n} and ` +
+        (from === to ? `picked ${whom}, but they couldn't move.` : `moved ${whom} ${sp.result > 0 ? 'forward' : 'back'} to ${posLabel(to)}.`);
     },
     skip() {
       if (ph !== 'play' || !isD || tr.paused || tr.skipUsed) return;
@@ -594,13 +686,15 @@ function handleAct(pid, act, d) {
       if (tr.paused) { tr.paused = false; hostStartTimer(); }
       else { tr.left = remaining() / 1000; hostStopTimer(); tr.paused = true; }
     },
-    toggle() { if (ph === 'review' && isD && tr.records[+d.i]) tr.records[+d.i].ok = !tr.records[+d.i].ok; },
+    toggle() { const r = tr && tr.records[+d.i]; if (ph === 'review' && isD && r && !r.status) r.ok = !r.ok; },
     confirmMove() {
-      if (ph !== 'review' || !isD) return;
+      if (ph !== 'review' || !isD || S.vote || tr.records.some(r => r.status === 'challenged')) return;
       const t = S.teams[S.cur], n = tr.records.filter(r => r.ok).length;
+      if (tr.mode === 'final') { if (n > 0) { S.winner = S.cur; S.phase = 'win'; } else S.phase = 'final-fail'; return; }
       const { from, to } = moveTeam(S.cur, n);
-      S.last = n === 0 ? `${t.name} didn't get any this time.` : `${t.name} got ${n} right and moved to ${to === S.len - 1 ? 'the finish' : 'space ' + to}.`;
-      S.after = (to > from && S.spaces[to].spade && to < S.len - 1) ? 'spade' : 'next';
+      S.last = n === 0 ? `${t.name} didn't get any this time.` : `${t.name} got ${n} right and moved to ${posLabel(to)}.`;
+      const land = to > from && to < S.len - 1 ? S.spaces[to] : null;
+      S.after = land && land.spade ? 'spade' : land && land.spin ? 'spin' : 'next';
     },
     spadeGo() {
       if (ph !== 'spade-intro') return;
@@ -623,12 +717,12 @@ function handleAct(pid, act, d) {
     rematch() {
       if (!host || ph !== 'win') return;
       S.teams.forEach(t => { t.pos = 0; t.desc = 0; });
-      Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+      Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, anim: null, winner: null, finalCat: null });
     },
     toLobby() {
       if (!host) return;
       hostStopTimer();
-      Object.assign(S, { phase: 'lobby', teams: [], cur: 0, turn: null, spade: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+      Object.assign(S, { phase: 'lobby', teams: [], cur: 0, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, anim: null, winner: null, finalCat: null });
     }
   };
   if (A[act]) { A[act](); broadcast(); }
@@ -701,6 +795,7 @@ function hostDrop(c) {
   if (c.pid && ![...conns].some(x => x.pid === c.pid)) {
     const p = S.players.find(x => x.id === c.pid);
     if (p) p.online = false;
+    checkVote();
     broadcast();
   }
 }
@@ -835,8 +930,12 @@ function effects(prev, v) {
     const r = nr.records[nr.records.length - 1];
     r.res === 'correct' ? sfx.ok() : r.res === 'foul' ? sfx.foul() : sfx.skip();
   } else if (pr && nr && !pr.parked && nr.parked) sfx.skip();
+  else if (pr && nr && v.phase === 'play' && nr.card && nr.card.foulBy && !(pr.card && pr.card.foulBy)) sfx.flag();
+  if (pr && nr && v.phase === 'review' && nr.records.some((r, i) => r.status === 'challenged' && !(pr.records[i] && pr.records[i].status))) sfx.flag();
+  if (v.vote && !prev.vote) sfx.flag();
   if (v.phase !== prev.phase) {
     if (v.phase === 'spade-intro') sfx.spade();
+    if (v.phase === 'spin') sfx.spinner();
     if (v.phase === 'play' || v.phase === 'spade-play') keepAwake();
     if (v.phase === 'win') { sfx.win(); confetti(); }
     if (v.phase === 'win' && v.turn && prev.phase === 'play') sfx.ok();
@@ -971,6 +1070,41 @@ function renderPanel(v) {
 }
 
 const RES_LABEL = { correct: 'Got it', skipped: 'Skipped', foul: 'Said the word', timeout: 'Time ran out' };
+function who(pid, v) { const ti = teamOf(pid, v); return nameOf(pid, v) + (ti != null && v.teams[ti] ? ` (${v.teams[ti].name})` : ''); }
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+/* spinner wheel: the host picks the slice; every device eases its own wheel onto it */
+const wa = { id: null, start: 0, final: 0, iv: 0, tick: 0 };
+function wheelSVG() {
+  const n = SPIN_VALUES.length, step = 360 / n, pt = (r, d) => [r * Math.cos(d * Math.PI / 180), r * Math.sin(d * Math.PI / 180)];
+  let s = '';
+  SPIN_VALUES.forEach((val, k) => {
+    const a0 = -90 + k * step, a1 = a0 + step, mid = a0 + step / 2;
+    const [x1, y1] = pt(100, a0), [x2, y2] = pt(100, a1), [tx, ty] = pt(68, mid);
+    const fill = val > 0 ? (k % 4 < 2 ? '#1E9B5A' : '#27B66D') : (k % 4 < 2 ? '#D9363E' : '#EA545B');
+    s += `<path d="M0 0L${f1(x1)} ${f1(y1)}A100 100 0 0 1 ${f1(x2)} ${f1(y2)}Z" fill="${fill}" stroke="#fff" stroke-width="2"/>`;
+    s += `<text class="wheel-lbl" text-anchor="middle" dy=".35em" transform="translate(${f1(tx)} ${f1(ty)}) rotate(${f1(mid + 90)})">${val > 0 ? '+' : '−'}${Math.abs(val)}</text>`;
+  });
+  return `<div class="wheel-wrap"><svg viewBox="-112 -120 224 232" aria-hidden="true"><g id="wheel">${s}<circle r="100" fill="none" stroke="#fff" stroke-width="5"/><circle r="15" fill="#fff"/></g><path class="wheel-pin" d="M-13 -117L13 -117L0 -88Z"/></svg></div>`;
+}
+function wheelAngle() { const t = Math.min(1, (performance.now() - wa.start) / SPIN_MS); return wa.final * (1 - Math.pow(1 - t, 3)); }
+function wheelDone(sp) { return wa.id === sp.id && performance.now() - wa.start >= SPIN_MS; }
+function paintWheel(a) { const g = document.getElementById('wheel'); if (g) g.setAttribute('transform', `rotate(${f1(a)})`); }
+function driveWheel(sp) {
+  if (sp.result == null) { paintWheel(0); return; }
+  if (wa.id !== sp.id) {
+    clearInterval(wa.iv);
+    const step = 360 / SPIN_VALUES.length;
+    Object.assign(wa, { id: sp.id, start: performance.now(), final: 360 * 6 - (sp.slice * step + step / 2), tick: 0 });
+    wa.iv = setInterval(() => {
+      const a = wheelAngle(); paintWheel(a);
+      const tk = Math.floor(a / step);
+      if (tk !== wa.tick) { wa.tick = tk; sfx.step(); }
+      if (performance.now() - wa.start >= SPIN_MS) { clearInterval(wa.iv); wa.iv = 0; sfx.ok(); renderStage(view()); }
+    }, 16);
+  }
+  paintWheel(wheelAngle());
+}
 
 function cardHTML(cat, word, band, right, extraCls) {
   return `<div class="card-stack"><div class="card cat-${cat} ${extraCls || ''}"><div class="card-band"><span>${band}</span><span>${right}</span></div><div class="card-word">${word}</div></div></div>`;
@@ -983,9 +1117,11 @@ const STAGE = {
     const dName = esc(nameOf(tr.describer, v));
     const top = `<div class="play-top">${timerHTML()}<div class="tally">${fin ? '<b>1</b><span>to win</span>' : `<b>${got}</b><span>correct</span>`}</div></div>`;
     const band = (fin ? 'Final · ' : '') + CAT[tr.cat];
+    const fb = tr.card && tr.card.foulBy;
     if (isD) {
       return `<div class="stage-inner">${top}
         ${cardHTML(tr.cat, tr.paused ? 'Paused' : esc(tr.card.word), band, esc(t.name), tr.paused ? 'paused' : '')}
+        ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))} called foul</b> on this card. If you did say the word or part of it, tap "Said the word". If you didn't, keep going: it gets settled after the turn.</div>` : ''}
         <div class="parked">${tr.parked
           ? `<span>Skipped: <b>${tr.paused ? '•••' : esc(tr.parked.word)}</b></span><button class="btn btn-small" data-act="useParked" ${tr.paused ? 'disabled' : ''}>Switch back to it</button>`
           : `<span class="small-hint">${tr.skipUsed ? 'Skip used this turn.' : 'You have 1 skip this turn.'}</span>`}</div>
@@ -1004,29 +1140,95 @@ const STAGE = {
       return `<div class="stage-inner">${top}
         <div class="guess cat-${tr.cat}"><b>${tr.paused ? 'Paused' : 'Guess!'}</b><span>${dName} is describing ${fin ? 'the final' : tr.cat === 'object' || tr.cat === 'action' ? 'an' : 'a'} ${CAT[tr.cat]} word</span></div>
         <p class="sub">Shout your answers out loud${fin ? '. One right answer wins the game!' : '. Every right answer moves your team one space.'}</p>
+        ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))}</b> called foul on this card. It gets settled after the turn.</div>` : ''}
         ${host ? `<div class="row"><button class="link" data-act="pause">${tr.paused ? 'Resume' : 'Pause'}</button></div>` : ''}
       </div>`;
     }
     return `<div class="stage-inner">${top}
       <p class="eyebrow">${esc(t.name)} is playing · ${dName} describes</p>
       ${cardHTML(tr.cat, tr.paused ? 'Paused' : esc(tr.card.word), band, 'You can see it', tr.paused ? 'paused' : '')}
-      <div class="note">You're on another team, so you can see the word. <b>Keep quiet</b> and listen for rule breaks. If ${dName} says the word, tell them to tap "Said the word".</div>
+      <div class="note">You're on another team, so you can see the word. <b>Keep quiet</b> and listen. If ${dName} says the word or part of it, call a foul. You can also challenge any card after the turn.</div>
+      ${mine == null ? '' : fb
+        ? `<button class="btn btn-foul btn-lg" disabled>🚩 Foul called by ${esc(nameOf(fb, v))}</button>`
+        : `<button class="btn btn-foul btn-lg" data-act="callFoul" ${tr.paused ? 'disabled' : ''}>🚩 Call foul: they said the word</button>`}
       ${host ? `<div class="row"><button class="link" data-act="pause">${tr.paused ? 'Resume' : 'Pause'}</button></div>` : ''}
     </div>`;
   },
   review(v) {
-    const tr = v.turn, t = v.teams[v.cur], n = tr.records.filter(r => r.ok).length;
-    const can = tr.describer === me || role === 'host';
-    const to = Math.min(v.len - 1, t.pos + n);
+    const tr = v.turn, t = v.teams[v.cur], n = tr.records.filter(r => r.ok).length, fin = tr.mode === 'final';
+    const mine = teamOf(me, v), host = role === 'host';
+    const can = tr.describer === me || host;          // fix cards and confirm
+    const side = mine === v.cur || host;              // accept or dispute a challenge
+    const opp = mine != null && mine !== v.cur;       // raise a challenge
+    const pending = !!v.vote || tr.records.some(r => r.status === 'challenged');
+    const to = Math.min(v.len - 1, t.pos + n), land = v.spaces[to];
+    const vote = v.vote, vr = vote && tr.records[vote.i];
+    let voteBox = '';
+    if (vote) {
+      const elig = v.players.filter(p => p.online && p.id !== tr.describer), done = elig.filter(p => vote.votes[p.id]).length, mv = vote.votes[me];
+      voteBox = `<div class="vote-box">
+        <p class="eyebrow">Foul vote</p>
+        <h3>Did ${esc(nameOf(tr.describer, v))} say “${esc(vr.word)}” or part of it?</h3>
+        <p class="small-hint">${esc(who(vr.foulBy, v))} called foul and ${esc(t.name)} disputed it. Everyone except the describer votes. If more people vote foul, the card doesn't count. A tie means it counts.</p>
+        ${me === tr.describer ? '<p>You described this card, so you don\'t vote.</p>' : `<div class="vote-row">
+          <button class="btn btn-foul ${mv === 'foul' ? 'picked' : ''}" data-act="vote" data-choice="foul" aria-pressed="${mv === 'foul'}">Foul: don't count it</button>
+          <button class="btn btn-fair ${mv === 'fair' ? 'picked' : ''}" data-act="vote" data-choice="fair" aria-pressed="${mv === 'fair'}">Fair: it counts</button></div>`}
+        <div class="row"><span class="small-hint">${done} of ${elig.length} voted${mv ? ' · you can still change your vote' : ''}</span>${host ? '<button class="link" data-act="endVote">End the vote now</button>' : ''}</div>
+      </div>`;
+    }
+    const items = tr.records.map((r, i) => {
+      const flag = r.status === 'challenged' || r.status === 'voting';
+      const tally = r.tally ? ` (${r.tally.foul}–${r.tally.fair})` : '';
+      const tag = r.status === 'challenged' ? `🚩 Foul called by ${nameOf(r.foulBy, v)}`
+        : r.status === 'voting' ? '🚩 Being voted on'
+        : r.status === 'upheld' ? `🚩 Foul, not counted${tally}`
+        : r.status === 'fair' ? `✓ Challenge rejected${tally}`
+        : r.ok ? '✓ Correct' : r.res === 'correct' ? 'Not counted' : RES_LABEL[r.res];
+      const cls = `rv ${r.ok ? 'ok' : ''} ${flag ? 'flag' : ''}`;
+      const body = `<span class="rv-word">${esc(r.word)}</span><span class="rv-tag">${esc(tag)}</span>`;
+      let acts = '';
+      if (r.status === 'challenged' && side) acts = `<button class="btn btn-small" data-act="acceptFoul" data-i="${i}">Fair call, remove it</button><button class="btn btn-small" data-act="dispute" data-i="${i}" ${vote ? 'disabled' : ''}>Dispute: vote on it</button>`;
+      else if (r.status === 'challenged') acts = `<span class="small-hint">Waiting for ${esc(t.name)} to accept or dispute</span>`;
+      else if (opp && r.ok && !r.status) acts = `<button class="btn btn-small" data-act="challenge" data-i="${i}">🚩 Challenge</button>`;
+      const box = can && !r.status ? `<button class="${cls}" data-act="toggle" data-i="${i}" aria-pressed="${r.ok}">${body}</button>` : `<div class="${cls}">${body}</div>`;
+      return `<li class="rv-item">${box}${acts ? `<div class="rv-actions">${acts}</div>` : ''}</li>`;
+    }).join('');
+    const intro = fin
+      ? (opp ? 'Think they broke a rule on the final card? Challenge it now, before they win.' : 'The other teams can challenge the card before the win counts.')
+      : (can ? 'Check the cards. Tap one to change it, for example if the team shouted it right on the buzzer.' : `${esc(nameOf(tr.describer, v))} is checking the cards.`) +
+        (opp ? ' Think they said the word or part of it? Tap Challenge on that card.' : '');
+    const line = fin
+      ? (n ? 'Final card correct.' : 'The final card doesn\'t count.')
+      : `Move forward <b>${n}</b> ${n === 1 ? 'space' : 'spaces'}${n > 0 && to === v.len - 1 ? ' to the finish!' : n > 0 && land.spade ? ', onto a spade!' : n > 0 && land.spin ? ', onto a spinner!' : ''}`;
+    const label = pending ? 'Settle the challenge first' : fin ? (n ? 'Confirm the win' : 'End turn') : n ? `Move ${esc(t.name)}` : 'End turn';
     return `<div class="stage-inner">
       <p class="eyebrow">${esc(t.name)}</p>
-      <h2>Time's up!</h2>
-      <p class="sub">${can ? 'Check the cards. Tap one to change it, for example if the team shouted it right on the buzzer.' : `${esc(nameOf(tr.describer, v))} is checking the cards.`}</p>
-      <ul class="review-list">${tr.records.map((r, i) => `<li>${can ? `<button class="rv ${r.ok ? 'ok' : ''}" data-act="toggle" data-i="${i}" aria-pressed="${r.ok}">` : `<div class="rv ${r.ok ? 'ok' : ''}">`}
-          <span class="rv-word">${esc(r.word)}</span><span class="rv-tag">${r.ok ? '✓ Correct' : r.res === 'correct' ? 'Not counted' : RES_LABEL[r.res]}</span>
-        ${can ? '</button>' : '</div>'}</li>`).join('')}</ul>
-      <p class="move-line">Move forward <b>${n}</b> ${n === 1 ? 'space' : 'spaces'}${to === v.len - 1 && n > 0 ? ' to the finish!' : v.spaces[to].spade && n > 0 ? ', onto a spade!' : ''}</p>
-      ${can ? `<button class="btn btn-go btn-lg" data-act="confirmMove">${n ? `Move ${esc(t.name)}` : 'End turn'}</button>` : ''}
+      <h2>${fin && n ? 'They got it!' : "Time's up!"}</h2>
+      <p class="sub">${intro}</p>
+      ${voteBox}
+      <ul class="review-list">${items}</ul>
+      <p class="move-line">${line}</p>
+      ${can ? `<button class="btn btn-go btn-lg" data-act="confirmMove" ${pending ? 'disabled' : ''}>${label}</button>` : ''}
+    </div>`;
+  },
+  spin(v) {
+    const sp = v.spinner, by = v.teams[sp.by], mine = teamOf(me, v);
+    const can = mine === sp.by || role === 'host';
+    const spun = sp.result != null, done = spun && wheelDone(sp), n = spun ? Math.abs(sp.result) : 0, fwd = spun && sp.result > 0;
+    const sub = !spun ? `Spin for +1, +2, −1 or −2. Then ${mine === sp.by ? 'your team picks' : esc(by.name) + ' picks'} any team to move: their own or another team.`
+      : !done ? 'Spinning…'
+      : `${fwd ? 'Forward' : 'Back'} ${n}! ${can ? 'Pick the team to move.' : esc(by.name) + ' is choosing which team to move…'}`;
+    return `<div class="stage-inner">
+      <p class="eyebrow">Spinner space</p>
+      <h2>${esc(by.name)} landed on a spinner!</h2>
+      <p class="sub">${sub}</p>
+      ${wheelSVG()}
+      ${done ? `<div class="spin-result">${fwd ? '+' : '−'}${n}</div>` : ''}
+      ${!spun ? (can ? '<button class="btn btn-go btn-lg" data-act="spin">Spin!</button>' : `<p class="sub">Waiting for ${esc(by.name)} to spin…</p>`) : ''}
+      ${done && can ? `<div class="spin-grid">${v.teams.map((t, i) => {
+        const to = Math.max(0, Math.min(v.len - 1, t.pos + sp.result));
+        return `<button class="btn spin-btn" style="--team:${t.color}" data-act="spinPick" data-i="${i}"><b>${fwd ? 'Move' : 'Send back'} ${esc(t.name)}${i === mine ? ' (your team)' : ''}</b><span>${to === t.pos ? `Can't move from ${posLabel(t.pos, v)}` : `${cap(posLabel(t.pos, v))} → ${posLabel(to, v)}`}</span></button>`;
+      }).join('')}</div>` : ''}
     </div>`;
   },
   'spade-intro'(v) {
@@ -1091,6 +1293,7 @@ function renderStage(v) {
   if (!v || !STAGE[ph]) {
     st.hidden = true; st.innerHTML = ''; document.body.classList.remove('locked');
     clearInterval(cd.iv); cd.iv = 0; lastCardKey = '';
+    clearInterval(wa.iv); wa.iv = 0;
     return;
   }
   st.hidden = false; document.body.classList.add('locked');
@@ -1104,6 +1307,7 @@ function renderStage(v) {
     const running = !v.turn.paused && !(ph === 'spade-play' && v.spade.timeUp);
     syncCountdown(msLeft(v), running);
   } else { clearInterval(cd.iv); cd.iv = 0; }
+  if (ph === 'spin') driveWheel(v.spinner);
   if (focusAct) { const b = st.querySelector(`[data-act="${focusAct}"]`); if (b) b.focus(); }
 }
 
@@ -1143,7 +1347,14 @@ function openRules() {
       <li>Act, mime or point. Words only.</li>
     </ul></section>
     <section><h3>Skips</h3><p>You get <b>1 skip per turn</b>. The skipped card waits on the side. If the next card is harder, you can switch back to the skipped one. The card you switch away from is out.</p></section>
+    <section><h3>Fouls and challenges 🚩</h3><ul>
+      <li>The other teams can see the word. If the describer says it or part of it, tap <b>Call foul</b> during the turn. The describer sees the flag and can drop the card.</li>
+      <li>After the turn, the other teams can also tap <b>Challenge</b> on any card that was counted.</li>
+      <li>The describing team either accepts (the card doesn't count) or disputes it. A dispute goes to a vote: everyone except the describer votes Foul or Fair. If more people vote foul, the card doesn't count. A tie means it counts.</li>
+      <li>The final card can be challenged too, before the win counts.</li>
+    </ul></section>
     <section><h3>Spades ♠</h3><p>End your turn on a spade and everyone plays. One describer from each team gets the same word and they all describe at once. The first team to shout it moves forward 1 space.</p></section>
+    <section><h3>Spinners</h3><p>End your turn on a spinner space (the red and green circle) and your team spins the wheel: +1, +2, −1 or −2. Then you choose any team to move by that amount: your own team, or a team you want to slow down. Moving because of the spinner doesn't set off another spade or spinner.</p></section>
     <section><h3>Winning</h3><p>Reaching the finish isn't enough. On your next turn, the other teams choose a category and you must get 1 card right in 30 seconds. Miss it and try again next turn. The first team to pass the final challenge wins.</p></section>
   </div>`;
   $('#rules').hidden = false;
@@ -1204,6 +1415,7 @@ document.addEventListener('click', e => {
   if (b.dataset.i) data.i = +b.dataset.i;
   if (b.dataset.team) data.team = +b.dataset.team;
   if (b.dataset.cat) data.cat = b.dataset.cat;
+  if (b.dataset.choice) data.choice = b.dataset.choice;
   doAct(a, data);
 });
 document.addEventListener('submit', e => { e.preventDefault(); UI.join(); });
