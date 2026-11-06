@@ -318,9 +318,8 @@ const HINT = {
 };
 const TEAM_COLORS = ['#E5197D', '#0B93CF', '#5EA813', '#F2701C', '#6A3FD1', '#8A5A33'];
 const DEFAULT_NAMES = ['The Talkers', 'Word Nerds', 'Quick Lips', 'Clue Crew', 'Chatterboxes', 'Big Mouths'];
-/* turn length follows board size: short 20s, standard 25s, long 30s */
-function turnSecs(len) { return { 30: 20, 40: 25, 50: 30 }[len] || 30; }
-let turnTotal = 30;        // shown turn length, for the countdown ring
+const TURN_SECONDS = 30;
+const BOARD_SIZES = [[20, 'Short · 20'], [25, 'Medium · 25'], [30, 'Long · 30']];
 const PEER_PREFIX = 'spade-speak-room-';
 const SPIN_VALUES = [1, -2, 2, -1, 1, -2, 2, -1];
 const SPIN_MS = 3200;
@@ -454,7 +453,7 @@ function spinBadge(r) {
   return `<circle r="${r}" fill="#1E9B5A"/><path d="M0 0L0 ${-r}A${r} ${r} 0 0 1 ${r} 0ZM0 0L0 ${r}A${r} ${r} 0 0 1 ${-r} 0Z" fill="#D9363E"/><circle r="${r}" fill="none" stroke="#fff" stroke-width="1.2"/><circle r="${r * .22}" fill="#fff"/>`;
 }
 function boardSVG(spaces, withTokens) {
-  const n = spaces.length, step = 360 / n, fs = n <= 30 ? 8.6 : n <= 40 ? 7.6 : 6.8;
+  const n = spaces.length, step = 360 / n, fs = n <= 20 ? 9.6 : n <= 25 ? 9 : n <= 30 ? 8.6 : n <= 40 ? 7.6 : 6.8;
   /* each board copy needs its own gradient id: a hidden copy can't paint the visible one */
   const gid = withTokens ? 'anyFillGame' : 'anyFillHome';
   let out = `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">${['object', 'action', 'world', 'person', 'random', 'nature'].map((c, k) => `<stop offset="${k / 5}" style="stop-color:var(--c-${c})"/>`).join('')}</linearGradient></defs>` + `<circle class="board-shadow" cx="200" cy="206" r="${R1 + 6}"/><circle class="plate" cx="200" cy="200" r="${R1 + 6}"/>`;
@@ -540,7 +539,10 @@ function draw(cat) {
   /* in Normal, the odd hard word is flagged on the card */
   return { cat, word, hard: mode === 'normal' && HARD.has(word) };
 }
-function newTurn(mode, cat, describer) { const total = turnSecs(S.len); return { mode, cat, describer, card: null, parked: null, skipUsed: false, records: [], left: total, total, paused: false, note: null }; }
+function newTurn(mode, cat, describer) {
+  Object.values(S.decks).forEach(shuffle);   // fresh random order at the start of every turn
+  return { mode, cat, describer, card: null, parked: null, skipUsed: false, records: [], left: TURN_SECONDS, paused: false, note: null };
+}
 function membersOf(ti, v = S) { return v.players.filter(p => p.team === ti); }
 function teamOf(pid, v = S) { const p = v.players.find(x => x.id === pid); return p ? p.team : null; }
 function nameOf(pid, v = S) { const p = v.players.find(x => x.id === pid); return p ? p.name : 'Someone'; }
@@ -554,7 +556,7 @@ function describerOf(ti, offset = 0, v = S) {
 function newLobby(code) {
   return {
     phase: 'lobby', code, hostId: me, players: [{ id: me, name: myName, team: 0, online: true }],
-    teamCount: 2, teamNames: DEFAULT_NAMES.slice(), len: 40, words: 'normal', teams: [], spaces: [], cur: 0, decks: {},
+    teamCount: 2, teamNames: DEFAULT_NAMES.slice(), len: 25, words: 'normal', teams: [], spaces: [], cur: 0, decks: {},
     turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null
   };
 }
@@ -641,7 +643,7 @@ function handleAct(pid, act, d) {
       S.teamCount = Math.min(6, Math.max(2, +d.n || 2));
       S.players.forEach(x => { if (x.team != null && x.team >= S.teamCount) x.team = null; });
     },
-    setLen() { if (host && ph === 'lobby' && [30, 40, 50].includes(+d.n)) S.len = +d.n; },
+    setLen() { if (host && ph === 'lobby' && BOARD_SIZES.some(([n]) => n === +d.n)) S.len = +d.n; },
     setWords() { if (host && ph === 'lobby' && MODES[d.choice]) S.words = d.choice; },
     rename() {
       if (!host || ph !== 'lobby') return;
@@ -1044,13 +1046,13 @@ function syncCountdown(ms, running) {
 function paintTimer(left) {
   const box = $('#timer'); if (!box) return;
   const C = 2 * Math.PI * 42;
-  box.querySelector('.prog').style.strokeDashoffset = f1(C * (1 - left / turnTotal));
+  box.querySelector('.prog').style.strokeDashoffset = f1(C * (1 - left / TURN_SECONDS));
   box.querySelector('span').textContent = Math.ceil(left);
   box.classList.toggle('low', left <= 5 && left > 0);
 }
 function timerHTML() {
   const C = 2 * Math.PI * 42;
-  return `<div class="timer" id="timer" role="timer" aria-label="Seconds left"><svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="42"/><circle class="prog" cx="50" cy="50" r="42" stroke-dasharray="${f1(C)}" stroke-dashoffset="0"/></svg><span>${turnTotal}</span></div>`;
+  return `<div class="timer" id="timer" role="timer" aria-label="Seconds left"><svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="42"/><circle class="prog" cx="50" cy="50" r="42" stroke-dasharray="${f1(C)}" stroke-dashoffset="0"/></svg><span>30</span></div>`;
 }
 
 /* ---------- rendering ---------- */
@@ -1107,7 +1109,7 @@ function renderHome() {
   $('#home').innerHTML = `
   <div class="home">
     <div class="home-left">
-      <p class="eyebrow">Online · classic rules · 20 to 30 second turns</p>
+      <p class="eyebrow">Online · classic rules · 30-second turns</p>
       <h1>Describe it fast. Race round the ring.</h1>
       <p class="lede">Play on your own phones from anywhere. One person creates a game and shares the room code. Everyone else joins with it and picks a team. No accounts needed.</p>
       <div class="board-wrap" style="max-width:340px;margin:0">${boardSVG(buildSpaces(40), false)}</div>
@@ -1157,7 +1159,7 @@ function renderLobby(v) {
     </div>
     ${host ? `<div class="settings">
       <div class="field"><span class="label" id="tcLabel">Teams</span><div class="seg-group" role="group" aria-labelledby="tcLabel">${[2, 3, 4, 5, 6].map(n => `<button data-act="setCount" data-n="${n}" aria-pressed="${n === v.teamCount}">${n}</button>`).join('')}</div></div>
-      <div class="field"><span class="label" id="lnLabel">Board size</span><div class="seg-group" role="group" aria-labelledby="lnLabel">${[[30, 'Short · 30 · 20s'], [40, 'Standard · 40 · 25s'], [50, 'Long · 50 · 30s']].map(([n, l]) => `<button data-act="setLen" data-n="${n}" aria-pressed="${n === v.len}">${l}</button>`).join('')}</div></div>
+      <div class="field"><span class="label" id="lnLabel">Board size</span><div class="seg-group" role="group" aria-labelledby="lnLabel">${BOARD_SIZES.map(([n, l]) => `<button data-act="setLen" data-n="${n}" aria-pressed="${n === v.len}">${l}</button>`).join('')}</div></div>
       <div class="field"><span class="label" id="wdLabel">Words</span><div class="seg-group" role="group" aria-labelledby="wdLabel">${Object.keys(MODES).map(m => `<button data-act="setWords" data-choice="${m}" aria-pressed="${m === (v.words || 'normal')}">${MODES[m]}</button>`).join('')}</div><p class="small-hint">${MODE_HINT[v.words || 'normal']}</p></div>
     </div>` : `<p class="muted">${v.teamCount} teams · ${v.len}-space board. The host can change these.</p>`}
     <div class="team-cols">${Array.from({ length: v.teamCount }, (_, i) => {
@@ -1200,7 +1202,7 @@ function renderPanel(v) {
     if (myTurn && sugg !== me && !(atFinish && !v.finalCat)) action = `<p class="muted">${esc(nameOf(sugg, v))} should press Start on their phone.</p>` + action.replace('btn-primary btn-lg', 'btn btn-small');
   } else action = `<p class="muted">Waiting for ${esc(t.name)} to start their turn.</p>`;
   const catBlock = atFinish
-    ? `<div class="final-block"><b>Final challenge${v.finalCat ? ': ' + CAT[v.finalCat] : ''}</b>${v.finalCat ? `Get 1 card right in ${turnSecs(v.len)} seconds to win.` : `The other teams pick a category. Get 1 card right in ${turnSecs(v.len)} seconds to win.`}</div>`
+    ? `<div class="final-block"><b>Final challenge${v.finalCat ? ': ' + CAT[v.finalCat] : ''}</b>${v.finalCat ? `Get 1 card right in 30 seconds to win.` : `The other teams pick a category. Get 1 card right in 30 seconds to win.`}</div>`
     : `<div class="cat-block cat-${cat}"><span>Category for this turn</span><b>${CAT[cat]}</b><span>${HINT[cat]}</span></div>`;
   const pick = mine == null ? `<div class="box"><h3>Join a team</h3><div class="row">${v.teams.map((tt, i) => `<button class="btn btn-small" data-act="team" data-team="${i}"><span class="dot" style="background:${tt.color};display:inline-block;vertical-align:-2px;margin-right:6px"></span>${esc(tt.name)}</button>`).join('')}</div></div>` : '';
   $('#panel').innerHTML = `
@@ -1384,7 +1386,7 @@ const STAGE = {
     return `<div class="stage-inner">
       <p class="eyebrow">Final challenge</p>
       <h2>${esc(t.name)} reached the finish</h2>
-      <p class="sub">To win, they need 1 right answer in ${turnSecs(v.len)} seconds. ${canPick ? '<b>Your team</b> helps choose the category. Pick the one you think is hardest for them. The first tap counts.' : 'The other teams are choosing your category…'}</p>
+      <p class="sub">To win, they need 1 right answer in 30 seconds. ${canPick ? '<b>Your team</b> helps choose the category. Pick the one you think is hardest for them. The first tap counts.' : 'The other teams are choosing your category…'}</p>
       ${canPick ? `<div class="cat-grid">${ORDER.map(c => `<button class="btn cat-btn cat-${c}" data-act="finalCat" data-cat="${c}"><b>${CAT[c]}</b><span>${HINT[c]}</span></button>`).join('')}</div>` : ''}
     </div>`;
   },
@@ -1422,7 +1424,6 @@ function renderStage(v) {
   }
   st.hidden = false; document.body.classList.add('locked');
   const focusAct = document.activeElement && st.contains(document.activeElement) ? document.activeElement.dataset.act : null;
-  if (v.turn) turnTotal = v.turn.total || turnSecs(v.len);
   st.innerHTML = STAGE[ph](v);
   const card = st.querySelector('.card');
   const cardKey = ph + ':' + (v.turn && v.turn.card ? v.turn.card.word : '');
@@ -1460,7 +1461,7 @@ function openRules() {
     </ol></section>
     <section><h3>Turns</h3><ol>
       <li>Teams take turns. Each turn one player describes; the describer rotates every turn.</li>
-      <li>The describer sees the word on their phone and has 20, 25 or 30 seconds (short, standard or long board) to describe as many words as they can from the category of the space their team is on.</li>
+      <li>The describer sees the word on their phone and has 30 seconds to describe as many words as they can from the category of the space their team is on.</li>
       <li>Their teammates see "Guess!" and shout answers. The other teams see the word too, so they can check for rule breaks.</li>
       <li>When time's up, your team moves forward one space for every right answer.</li>
     </ol></section>
