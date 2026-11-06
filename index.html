@@ -48,6 +48,8 @@ p { margin: 0; }
 .cat-person { --cat: var(--c-person); --cat-fg: #fff; }
 .cat-random { --cat: var(--c-random); --cat-fg: #fff; }
 .cat-nature { --cat: var(--c-nature); --cat-fg: #fff; }
+.cat-any    { --cat: linear-gradient(100deg, var(--c-object), var(--c-action), var(--c-world), var(--c-person), var(--c-random), var(--c-nature)); --cat-fg: #fff; }
+.cat-any b, .cat-any span { text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
 .pill { display: inline-flex; align-items: center; gap: 6px; background: var(--cat); color: var(--cat-fg); font-weight: 800; border-radius: 999px; padding: .2em .8em; font-size: .9rem; }
 .eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; font-weight: 800; color: var(--muted); }
 .muted { color: var(--muted); }
@@ -127,6 +129,7 @@ input[type="text"] { font: inherit; padding: .62em .8em; border-radius: 12px; bo
 .seg-object { fill: var(--c-object); } .seg-action { fill: var(--c-action); } .seg-world { fill: var(--c-world); }
 .seg-person { fill: var(--c-person); } .seg-random { fill: var(--c-random); } .seg-nature { fill: var(--c-nature); }
 .seg-finish { fill: var(--finish); }
+.seg-lbl.lbl-any { paint-order: stroke; stroke: rgba(0, 0, 0, .45); stroke-width: 2px; }
 .spade circle { fill: var(--spade-badge); stroke: #fff; stroke-width: 1.2; }
 .spade text { fill: #fff; font-size: 11px; font-family: var(--f-body); }
 .fin-glyph { fill: var(--plate); font-size: 11px; }
@@ -307,10 +310,11 @@ button.rv { cursor: pointer; }
 
 <script>
 const ORDER = ['object', 'action', 'world', 'person', 'random', 'nature'];
-const CAT = { object: 'Object', action: 'Action', world: 'World', person: 'Person', random: 'Random', nature: 'Nature' };
+const CAT = { object: 'Object', action: 'Action', world: 'World', person: 'Person', random: 'Random', nature: 'Nature', any: 'Any' };
 const HINT = {
   object: 'Things you can touch or use', action: 'Things you do', world: 'Places, countries, landmarks',
-  person: 'Famous people, real or made up', random: 'Anything at all', nature: 'Animals, plants, weather, space'
+  person: 'Famous people, real or made up', random: 'Anything at all', nature: 'Animals, plants, weather, space',
+  any: 'Every card comes from a random category'
 };
 const TEAM_COLORS = ['#E5197D', '#0B93CF', '#5EA813', '#F2701C', '#6A3FD1', '#8A5A33'];
 const DEFAULT_NAMES = ['The Talkers', 'Word Nerds', 'Quick Lips', 'Clue Crew', 'Chatterboxes', 'Big Mouths'];
@@ -320,12 +324,12 @@ const SPIN_VALUES = [1, -2, 2, -1, 1, -2, 2, -1];
 const SPIN_MS = 3200;
 
 const WORDS = {
-  object: 'Toaster|Umbrella|Toothbrush|Ladder|Scissors|Pillow|Kettle|Hammer|Telescope|Backpack|Candle|Wallet|Sunglasses|Microwave|Keyboard|Helmet|Envelope|Trampoline|Calculator|Mirror|Saucepan|Padlock|Magnifying glass|Stapler|Wheelbarrow|Binoculars|Bicycle|Sofa|Hairdryer|Remote control|Teapot|Suitcase|Guitar|Piano|Violin|Compass|Thermometer|Chopsticks|Spatula|Doorbell|Fridge|Lamp|Crayon|Paintbrush|Skateboard|Tent|Bucket|Frying pan|Light bulb|Battery|Headphones|Trophy|Crown|Balloon|Kite|Anchor|Parachute|Sandal|Scarf|Glove|Necklace|Perfume|Sponge|Vacuum cleaner|Washing machine|Blender|Rolling pin|Whistle|Dice|Jigsaw puzzle|Wristwatch|Calendar|Passport|Fork|Toilet roll|Plaster|Hourglass|Pencil sharpener|Lawnmower|Coat hanger|Paperclip|Doormat|Ironing board|Tin opener|Postbox|Wheelchair|Microphone|Screwdriver|Lunchbox|Phone charger',
-  action: 'Juggling|Sneezing|Swimming|Whispering|Knitting|Skiing|Yawning|Baking|Hiccupping|Sleepwalking|Tiptoeing|Skydiving|Gardening|Ironing|Snoring|Winking|Surfing|Painting|Climbing|Dancing|Shouting|Sweeping|Tickling|Hugging|Clapping|Shivering|Sunbathing|Bowling|Fishing|Hitchhiking|Recycling|Texting|Wrestling|Rowing|Jogging|Kneeling|Shrugging|Giggling|Apologising|Proposing|Celebrating|Photographing|Babysitting|Camping|Sewing|Flossing|Blinking|Stretching|Dreaming|Cheating|Borrowing|Complaining|Sneaking|Bouncing|Digging|Folding|Gargling|Kicking|Marching|Nodding|Peeling|Queuing|Racing|Sliding|Stirring|Tasting|Voting|Waving|Yodelling|Zipping|Boxing|Crawling|Diving|Exploring|Skipping|Brushing teeth|Hiding|Shopping|Sledging|Whistling|Arguing|Daydreaming|Hoovering|Moonwalking|Parking|Snorkelling|Typing|Cartwheeling|Weightlifting',
-  world: 'Eiffel Tower|Australia|Mount Everest|Sahara Desert|Amazon River|London|Great Wall of China|Japan|Egypt|Niagara Falls|Venice|Antarctica|Statue of Liberty|Brazil|Big Ben|Paris|New York|Pyramids|Hollywood|Canada|India|Italy|Mexico|Grand Canyon|Taj Mahal|Dubai|Iceland|Las Vegas|Pacific Ocean|North Pole|Rome|Colosseum|Sydney Opera House|Ireland|Scotland|Wales|Spain|Greece|Germany|Russia|China|Africa|Hawaii|The Alps|Mediterranean Sea|Stonehenge|Tokyo|Kenya|Switzerland|Amsterdam|Mount Kilimanjaro|River Nile|Caribbean|Jamaica|Turkey|River Thames|Buckingham Palace|Times Square|Golden Gate Bridge|Leaning Tower of Pisa|Machu Picchu|Mount Fuji|Morocco|Pakistan|Nigeria|Argentina|Peru|Norway|Portugal|Manchester|Liverpool|Edinburgh|Barcelona|Istanbul|Atlantic Ocean|Mount Olympus|Bermuda Triangle|Loch Ness|Hong Kong|Singapore|Brighton|Cornwall|Madagascar|New Zealand|Panama Canal|South Pole|Cairo',
-  person: 'Albert Einstein|William Shakespeare|Harry Potter|Santa Claus|Cristiano Ronaldo|Lionel Messi|Queen Elizabeth II|Michael Jackson|Taylor Swift|Spider-Man|Batman|Superman|Mickey Mouse|Isaac Newton|Leonardo da Vinci|Barack Obama|Nelson Mandela|Usain Bolt|Muhammad Ali|Elvis Presley|Charlie Chaplin|Cinderella|Snow White|Sherlock Holmes|James Bond|Shrek|Homer Simpson|SpongeBob|Mr Bean|Pinocchio|Peter Pan|Robin Hood|King Arthur|Cleopatra|Napoleon|Christopher Columbus|Neil Armstrong|Marie Curie|Charles Darwin|Mozart|Beethoven|Pablo Picasso|Vincent van Gogh|Walt Disney|Steve Jobs|Bill Gates|Mo Salah|David Beckham|Serena Williams|Lewis Hamilton|Oprah Winfrey|Beyoncé|Adele|Ed Sheeran|Darth Vader|Yoda|Super Mario|Sonic the Hedgehog|Pikachu|Elsa|Simba|Winnie the Pooh|Paddington Bear|Gandalf|Hermione Granger|Willy Wonka|Tarzan|Aladdin|Hercules|Tooth Fairy|Easter Bunny|Dracula|Frankenstein|Little Red Riding Hood|Wonder Woman|Iron Man|The Hulk|Captain America|The Joker|Abraham Lincoln|Martin Luther King|Mahatma Gandhi|Winston Churchill|Florence Nightingale|Roald Dahl|Ronald McDonald|Bob the Builder|Peppa Pig|Scooby-Doo|Mary Poppins',
-  random: 'Birthday party|Homework|Monday|Chocolate|Pizza|Christmas|Hide and seek|Traffic jam|Selfie|Wi-Fi|Password|Football|Olympics|Wedding|Holiday|Sandcastle|Rollercoaster|Popcorn|Ice cream|Sushi|Pancake|Spaghetti|Sandwich|School|Hospital|Library|Museum|Cinema|Zoo|Circus|Magician|Pirate|Ninja|Astronaut|Dinosaur|Ghost|Zombie|Vampire|Dragon|Unicorn|Mermaid|Treasure|Superhero|Emoji|Video game|Fireworks|Halloween|Valentine\'s Day|New Year|Snowman|Sleepover|Picnic|Barbecue|Breakfast|Gravity|Electricity|Internet|Alphabet|Money|Jealousy|Happiness|Nightmare|Gossip|Karaoke|Recipe|Yoga|Marathon|Penalty|Referee|Red card|Checkmate|Lottery|Doctor|Firefighter|Teacher|Police officer|Robot|Alien|Bedtime story|Fairy tale|Fancy dress|Detention|Lunch break|Shopping list|Nap|Tickets|Jokes|Hiccups|Surprise party|Treasure map',
-  nature: 'Elephant|Sunflower|Volcano|Rainbow|Octopus|Tornado|Penguin|Cactus|Waterfall|Butterfly|Giraffe|Mushroom|Thunder|Earthquake|Oak tree|Dolphin|Kangaroo|Snowflake|Hedgehog|Jellyfish|Eagle|Crocodile|Glacier|Lightning|Hurricane|Coral reef|Rose|Daisy|Owl|Bee|Spider|Shark|Whale|Lion|Tiger|Zebra|Panda|Koala|Gorilla|Flamingo|Peacock|Parrot|Snail|Worm|Frog|Tortoise|Rabbit|Squirrel|Fox|Wolf|Polar bear|Deer|Camel|Horse|Cow|Sheep|Pig|Chicken|Duck|Swan|Ant|Ladybird|Caterpillar|Seaweed|Iceberg|Cloud|Fog|Sunrise|Moon|Star|Comet|Pebble|Sand dune|River|Island|Cave|Forest|Jungle|Puddle|Acorn|Pine cone|Tulip|Bamboo|Coconut|Hailstone|Bat|Hamster|Goldfish|Mosquito|Seagull|Bluebell|Nettle|Sunset'
+  object: 'Toaster|Umbrella|Toothbrush|Ladder|Scissors|Pillow|Kettle|Hammer|Telescope|Backpack|Candle|Wallet|Sunglasses|Microwave|Keyboard|Helmet|Envelope|Trampoline|Calculator|Mirror|Saucepan|Padlock|Magnifying glass|Stapler|Wheelbarrow|Binoculars|Bicycle|Sofa|Hairdryer|Remote control|Teapot|Suitcase|Guitar|Piano|Violin|Compass|Thermometer|Chopsticks|Spatula|Doorbell|Fridge|Lamp|Crayon|Paintbrush|Skateboard|Tent|Bucket|Frying pan|Light bulb|Battery|Headphones|Trophy|Crown|Balloon|Kite|Anchor|Parachute|Sandal|Scarf|Glove|Necklace|Perfume|Sponge|Vacuum cleaner|Washing machine|Blender|Rolling pin|Whistle|Dice|Jigsaw puzzle|Wristwatch|Calendar|Passport|Fork|Toilet roll|Plaster|Hourglass|Pencil sharpener|Lawnmower|Coat hanger|Paperclip|Doormat|Ironing board|Tin opener|Postbox|Wheelchair|Microphone|Screwdriver|Lunchbox|Phone charger|Alarm clock|Apron|Armchair|Axe|Baby bottle|Bandage|Barbell|Baseball cap|Basket|Bathtub|Beanbag|Bed sheet|Bell|Belt|Bin bag|Blanket|Bookshelf|Boomerang|Bottle opener|Bow tie|Bowl|Bracelet|Briefcase|Broom|Bubble wrap|Bunk bed|Butter knife|Camera|Canoe|Car keys|Cardboard box|Carpet|Cash register|Ceiling fan|Chair|Chessboard|Chopping board|Clipboard|Clock|Coat|Coffee mug|Colander|Comb|Computer mouse|Cooker|Cork|Cot|Crutches|Cupboard|Curtains|Cushion|Deckchair|Desk|Dishwasher|Doll|Door handle|Drawer|Drill|Drum|Duvet|Dustpan|Earrings|Easel|Egg cup|Rubber|Fan|Feather duster|Fence|Fire extinguisher|Fishing rod|Flag|Flip-flops|Flowerpot|Football boots|Frisbee|Game controller|Garden hose|Glasses|Globe|Glue stick|Goggles|Golf club|Grater|Hairbrush|Hammock|Handbag|Harmonica|Hat|Headband|Highlighter|Hoodie|Ice skates|Jacket|Jar|Jeans|Jug|Key|Knife|Ladle|Lantern|Laptop|Lipstick|Magnet|Map|Marble|Mask|Mattress|Tape measure|Medal|Megaphone|Microscope|Mittens|Mop|Mug|Nail clippers|Napkin|Needle|Newspaper|Notebook|Oar|Oven glove|Paddle|Paint roller|Paper plane|Pen|Pencil|Pepper grinder|Photo frame|Piggy bank|Pillowcase|Pin|Pizza cutter|Plate|Plug|Pogo stick|Pram|Printer|Projector|Purse|Pyjamas|Radiator|Radio|Raincoat|Rake|Razor|Recorder|Ring|Rocking chair|Roller skates|Rope|Rubber duck|Ruler|Safety pin|Salt shaker|Sandpaper|Satellite dish|Saw|Scales|Scooter|Screw|Seatbelt|Sellotape|Shampoo|Shed|Shelf|Shield|Shoelace|Shopping trolley|Shovel|Sieve|Sink|Sledge|Sleeping bag|Slippers|Smoke alarm|Snorkel|Soap|Sock|Spoon|Steering wheel|Stethoscope|Stool|Straw|String|Sun cream|Surfboard|Sword|Table|Tablet|Tap|Tea towel|Teddy bear|Telephone|Television|Tennis racket|Thimble|Tie|Tissue|Toilet|Tongs|Toolbox|Torch|Towel|Tractor|Traffic cone|Trainers|Tray|Treasure chest|Tripod|Trumpet|T-shirt|Tweezers|Typewriter|Tyre|USB stick|Vase|Walking stick|Wardrobe|Watering can|Wellies|Whisk|Wig|Window|Windscreen wiper|Wok|Xylophone|Yo-yo|Zip|Bunsen burner|Cheese grater|Dartboard|Fridge magnet|Hot water bottle|Lunch tray|Pencil case|Plunger|Rolling suitcase|Snow globe|Stopwatch|Swiss army knife|Toothpaste|Trampoline mat|Walkie-talkie',
+  action: 'Juggling|Sneezing|Swimming|Whispering|Knitting|Skiing|Yawning|Baking|Hiccupping|Sleepwalking|Tiptoeing|Skydiving|Gardening|Ironing|Snoring|Winking|Surfing|Painting|Climbing|Dancing|Shouting|Sweeping|Tickling|Hugging|Clapping|Shivering|Sunbathing|Bowling|Fishing|Hitchhiking|Recycling|Texting|Wrestling|Rowing|Jogging|Kneeling|Shrugging|Giggling|Apologising|Proposing|Celebrating|Photographing|Babysitting|Camping|Sewing|Flossing|Blinking|Stretching|Dreaming|Cheating|Borrowing|Complaining|Sneaking|Bouncing|Digging|Folding|Gargling|Kicking|Marching|Nodding|Peeling|Queuing|Racing|Sliding|Stirring|Tasting|Voting|Waving|Yodelling|Zipping|Boxing|Crawling|Diving|Exploring|Skipping|Brushing teeth|Hiding|Shopping|Sledging|Whistling|Arguing|Daydreaming|Hoovering|Moonwalking|Parking|Snorkelling|Typing|Cartwheeling|Weightlifting|Abseiling|Acting|Applauding|Arm wrestling|Ballet dancing|Bargaining|Bathing|Beatboxing|Begging|Blowing bubbles|Blushing|Bragging|Breakdancing|Breathing|Building|Bungee jumping|Burping|Calling|Canoeing|Carrying|Carving|Catching|Chasing|Cheering|Chewing|Chopping|Cleaning|Coughing|Counting|Crying|Cuddling|Curtsying|Cycling|Delivering|Doodling|Dribbling|Drinking|Driving|Drumming|Dusting|Eating|Escaping|Exercising|Falling|Fencing|Fighting|Flipping pancakes|Floating|Flying|Forgetting|Frowning|Gaming|Gliding|Grinning|Growing|Grumbling|Guessing|Hammering|Hiking|Hopping|Hula hooping|Humming|Hunting|Ice skating|Interviewing|Inventing|Jumping|Karate|Kissing|Kite flying|Knocking|Laughing|Leaping|Learning|Licking|Lifting|Limping|Listening|Losing|Melting|Mixing|Mopping|Mountain biking|Mumbling|Napping|Negotiating|Opening|Ordering|Packing|Paddling|Panicking|Parachuting|Patting|Pausing|Pinching|Planting|Poking|Polishing|Posing|Pouring|Praying|Pretending|Printing|Pulling|Punching|Pushing|Reading|Relaxing|Repairing|Rescuing|Horse riding|Rock climbing|Rolling|Running|Sailing|Saluting|Sawing|Scratching|Screaming|Scrubbing|Searching|Shaking hands|Shaving|Showering|Singing|Sitting|Skating|Sketching|Skateboarding|Sleeping|Slipping|Smiling|Sniffing|Snowboarding|Spinning|Splashing|Spying|Squeezing|Squinting|Stamping|Staring|Stealing|Stomping|Studying|Sulking|Sweating|Swinging|Tap dancing|Teaching|Throwing|Tidying|Training|Travelling|Trembling|Tripping|Tumbling|Tying shoelaces|Unpacking|Vacuuming|Waiting|Waking up|Walking|Washing up|Watching TV|Watering plants|Weaving|Winning|Wishing|Writing|Yelling|Brushing hair|Changing a nappy|Climbing stairs|Doing homework|Feeding the ducks|Getting dressed|Making the bed|Playing hopscotch|Pulling a face|Rocking a baby|Sharpening a pencil|Skimming stones|Taking a selfie|Telling a joke|Throwing a tantrum|Walking the dog|Washing the car|Wrapping a present|Building a snowman|Blowing out candles|Changing a light bulb|Climbing a tree|Crossing the road|Flying a plane|Hailing a taxi|Kneading dough|Milking a cow|Pitching a tent|Riding a bike|Rowing a boat|Scoring a goal|Setting the table|Sewing a button|Shuffling cards|Taking out the bin|Tightrope walking|Walking on stilts',
+  world: 'Eiffel Tower|Australia|Mount Everest|Sahara Desert|Amazon River|London|Great Wall of China|Japan|Egypt|Niagara Falls|Venice|Antarctica|Statue of Liberty|Brazil|Big Ben|Paris|New York|Pyramids|Hollywood|Canada|India|Italy|Mexico|Grand Canyon|Taj Mahal|Dubai|Iceland|Las Vegas|Pacific Ocean|North Pole|Rome|Colosseum|Sydney Opera House|Ireland|Scotland|Wales|Spain|Greece|Germany|Russia|China|Africa|Hawaii|The Alps|Mediterranean Sea|Stonehenge|Tokyo|Kenya|Switzerland|Amsterdam|Mount Kilimanjaro|River Nile|Caribbean|Jamaica|Turkey|River Thames|Buckingham Palace|Times Square|Golden Gate Bridge|Leaning Tower of Pisa|Machu Picchu|Mount Fuji|Morocco|Pakistan|Nigeria|Argentina|Peru|Norway|Portugal|Manchester|Liverpool|Edinburgh|Barcelona|Istanbul|Atlantic Ocean|Mount Olympus|Bermuda Triangle|Loch Ness|Hong Kong|Singapore|Brighton|Cornwall|Madagascar|New Zealand|Panama Canal|South Pole|Cairo|Algeria|Austria|Bangladesh|Belgium|Bolivia|Bulgaria|Cambodia|Chile|Colombia|Croatia|Cuba|Cyprus|Czech Republic|Denmark|Ethiopia|Fiji|Finland|Ghana|Hungary|Indonesia|Iran|Iraq|Israel|Jordan|Kuwait|Lebanon|Libya|Malaysia|Malta|Mongolia|Nepal|Netherlands|North Korea|Oman|Philippines|Poland|Qatar|Romania|Saudi Arabia|Senegal|Somalia|South Africa|South Korea|Sri Lanka|Sudan|Sweden|Syria|Taiwan|Tanzania|Thailand|Tunisia|Uganda|Ukraine|Uruguay|Venezuela|Vietnam|Yemen|Zimbabwe|Athens|Bangkok|Beijing|Berlin|Birmingham|Boston|Brussels|Budapest|Buenos Aires|Cape Town|Cardiff|Chicago|Copenhagen|Delhi|Dublin|Florence|Geneva|Glasgow|Havana|Helsinki|Jerusalem|Lagos|Leeds|Lisbon|Los Angeles|Madrid|Marrakech|Mecca|Miami|Milan|Moscow|Mumbai|Munich|Nairobi|Naples|Oslo|Oxford|Cambridge|Prague|Rio de Janeiro|San Francisco|Seoul|Stockholm|Tripoli|Benghazi|Toronto|Vancouver|Vienna|Warsaw|Washington DC|York|Zurich|Doha|Abu Dhabi|Riyadh|Casablanca|Kyoto|Shanghai|Bali|Maldives|Seychelles|Sicily|Crete|Tenerife|Ibiza|Majorca|Isle of Wight|Lake District|Snowdon|Ben Nevis|Disneyland|Mount Rushmore|White House|Kremlin|Acropolis|Petra|Angkor Wat|Christ the Redeemer|Burj Khalifa|Tower Bridge|London Eye|Tower of London|Edinburgh Castle|Windsor Castle|Hadrian\'s Wall|Sagrada Familia|Vatican City|Sistine Chapel|Louvre|Notre-Dame|Arc de Triomphe|Brandenburg Gate|Berlin Wall|Red Square|Forbidden City|Great Barrier Reef|Victoria Falls|Dead Sea|Red Sea|Black Sea|Indian Ocean|Arctic Ocean|Suez Canal|Gobi Desert|Himalayas|Andes|Rocky Mountains|Mississippi River|Danube|Yellowstone|Central Park|Wall Street|Silicon Valley|Route 66|Galapagos Islands|Easter Island|Greenland|Siberia|Scandinavia|Middle East|Europe|Asia|South America|North America|Wembley Stadium|Old Trafford|Anfield|Heathrow Airport|Channel Tunnel|English Channel|Mont Blanc|Matterhorn|Table Mountain|Uluru|Bora Bora|Copacabana|Alcatraz|Pentagon|Leptis Magna|Sabratha|Ghadames|Atlas Mountains|Lake Victoria|Mount Etna|Pompeii|Chernobyl|Hollywood Sign|Bahamas|Cotswolds',
+  person: 'Albert Einstein|William Shakespeare|Harry Potter|Santa Claus|Cristiano Ronaldo|Lionel Messi|Queen Elizabeth II|Michael Jackson|Taylor Swift|Spider-Man|Batman|Superman|Mickey Mouse|Isaac Newton|Leonardo da Vinci|Barack Obama|Nelson Mandela|Usain Bolt|Muhammad Ali|Elvis Presley|Charlie Chaplin|Cinderella|Snow White|Sherlock Holmes|James Bond|Shrek|Homer Simpson|SpongeBob|Mr Bean|Pinocchio|Peter Pan|Robin Hood|King Arthur|Cleopatra|Napoleon|Christopher Columbus|Neil Armstrong|Marie Curie|Charles Darwin|Mozart|Beethoven|Pablo Picasso|Vincent van Gogh|Walt Disney|Steve Jobs|Bill Gates|Mo Salah|David Beckham|Serena Williams|Lewis Hamilton|Oprah Winfrey|Beyoncé|Adele|Ed Sheeran|Darth Vader|Yoda|Super Mario|Sonic the Hedgehog|Pikachu|Elsa|Simba|Winnie the Pooh|Paddington Bear|Gandalf|Hermione Granger|Willy Wonka|Tarzan|Aladdin|Hercules|Tooth Fairy|Easter Bunny|Dracula|Frankenstein|Little Red Riding Hood|Wonder Woman|Iron Man|The Hulk|Captain America|The Joker|Abraham Lincoln|Martin Luther King|Mahatma Gandhi|Winston Churchill|Florence Nightingale|Roald Dahl|Ronald McDonald|Bob the Builder|Peppa Pig|Scooby-Doo|Mary Poppins|Agatha Christie|Alexander the Great|Amelia Earhart|Anne Frank|Ariana Grande|Arnold Schwarzenegger|Banksy|Bart Simpson|Beatrix Potter|Billie Eilish|Black Panther|Bruce Lee|Bugs Bunny|Buzz Lightyear|Captain Hook|Charles Dickens|Charlie Brown|Cookie Monster|Dennis the Menace|Dora the Explorer|Doctor Who|Donald Duck|Dumbledore|Dwayne Johnson|Elton John|Eminem|Emma Watson|Fred Flintstone|Freddie Mercury|Frodo Baggins|Galileo|Garfield|Genghis Khan|George Washington|Goldilocks|Gordon Ramsay|Hello Kitty|Henry VIII|Alfred Hitchcock|Indiana Jones|Jack Sparrow|Jackie Chan|Joan of Arc|John Lennon|Julius Caesar|Justin Bieber|Kermit the Frog|Kim Kardashian|King Kong|Kylian Mbappe|LeBron James|Lady Gaga|Lara Croft|Lightning McQueen|Luke Skywalker|Madonna|Marilyn Monroe|Michael Jordan|Michelangelo|Miss Piggy|Moana|Mother Teresa|Mulan|Neymar|Nemo|Olaf|Optimus Prime|Paul McCartney|Pele|Peter Rabbit|Pocahontas|Popeye|Postman Pat|Prince Harry|Princess Diana|Queen Victoria|Rapunzel|Rihanna|Roger Federer|Rowan Atkinson|Rudolph|Scrooge|Shakira|Sleeping Beauty|Snoopy|Stephen Hawking|Steven Spielberg|Thor|Thomas the Tank Engine|Tiger Woods|Tinker Bell|Tom Cruise|Tutankhamun|Wednesday Addams|Will Smith|Wolverine|Woody|Zinedine Zidane|Zeus|Poseidon|Medusa|Merlin|The Grinch|Mowgli|Baloo|Stitch|Patrick Star|Humpty Dumpty|Rumpelstiltskin|Pac-Man|Harry Styles|Dua Lipa|Drake|Bruno Mars|Stormzy|Erling Haaland|Harry Kane|Wayne Rooney|Marcus Rashford|Mike Tyson|Venus Williams|Simone Biles|Mo Farah|Andy Murray|Novak Djokovic|Rafael Nadal|Diego Maradona|Thomas Edison|Nikola Tesla|Alexander Graham Bell|Elon Musk|Mark Zuckerberg|Jeff Bezos|Captain Cook|Marco Polo|Ibn Battuta|Saladin|Omar Mukhtar|Rosa Parks|Malala|Greta Thunberg|David Attenborough|Bob Marley|Frida Kahlo|Mona Lisa|Big Bird|Elmo|Barbie|Catwoman|Aquaman|Deadpool|Captain Marvel|Doctor Strange|Groot|Puss in Boots|Ariel|Cruella de Vil|Maleficent|Fireman Sam|Noddy|Jay-Z|Kylie Minogue|Lewis Carroll|Alice in Wonderland|Mad Hatter|Cheshire Cat|Dorothy|Wicked Witch|Tin Man|Pied Piper|Little Mermaid|Ugly Duckling|Three Little Pigs|Big Bad Wolf|Gingerbread Man|Hansel and Gretel|Sinbad|Ali Baba|Lord Voldemort|Ron Weasley|Hagrid',
+  random: 'Birthday party|Homework|Monday|Chocolate|Pizza|Christmas|Hide and seek|Traffic jam|Selfie|Wi-Fi|Password|Football|Olympics|Wedding|Holiday|Sandcastle|Rollercoaster|Popcorn|Ice cream|Sushi|Pancake|Spaghetti|Sandwich|School|Hospital|Library|Museum|Cinema|Zoo|Circus|Magician|Pirate|Ninja|Astronaut|Dinosaur|Ghost|Zombie|Vampire|Dragon|Unicorn|Mermaid|Treasure|Superhero|Emoji|Video game|Fireworks|Halloween|Valentine\'s Day|New Year|Snowman|Sleepover|Picnic|Barbecue|Breakfast|Gravity|Electricity|Internet|Alphabet|Money|Jealousy|Happiness|Nightmare|Gossip|Karaoke|Recipe|Yoga|Marathon|Penalty|Referee|Red card|Checkmate|Lottery|Doctor|Firefighter|Teacher|Police officer|Robot|Alien|Bedtime story|Fairy tale|Fancy dress|Detention|Lunch break|Shopping list|Nap|Tickets|Jokes|Hiccups|Surprise party|Treasure map|Burger|Chips|Hot dog|Doughnut|Cupcake|Croissant|Lasagne|Curry|Kebab|Couscous|Falafel|Hummus|Noodles|Omelette|Porridge|Cereal|Toast|Jam|Honey|Cheese|Yoghurt|Milkshake|Smoothie|Lemonade|Hot chocolate|Tea|Coffee|Biscuit|Brownie|Cheesecake|Trifle|Jelly|Custard|Waffle|Taco|Burrito|Nachos|Dumplings|Fish and chips|Roast dinner|Sausage roll|Baked beans|Boiled egg|Fried rice|Soup|Salad|Strawberry|Banana|Pineapple|Apple pie|Candy floss|Lollipop|Marshmallow|Bubble gum|Toffee|Crisps|Pilot|Chef|Nurse|Dentist|Plumber|Electrician|Builder|Farmer|Vet|Lawyer|Judge|Scientist|Journalist|Postman|Hairdresser|Butcher|Baker|Librarian|Lifeguard|Mechanic|Taxi driver|Bus driver|Soldier|Spy|Detective|Footballer|Clown|DJ|Photographer|Waiter|Cleaner|Architect|Engineer|Programmer|Zookeeper|Shopkeeper|Pharmacist|Tour guide|Graduation|Job interview|Exam|Report card|Sports day|School trip|Car boot sale|Camping trip|Road trip|Baby shower|Eid|Ramadan|Diwali|Easter|Bonfire Night|Mother\'s Day|Father\'s Day|April Fools|Black Friday|World Cup|Champions League|Super Bowl|Wimbledon|Tour de France|Eurovision|Oscars|Concert|Festival|Carnival|Parade|Talent show|Quiz|Crossword|Sudoku|Monopoly|Scrabble|Tetris|Minecraft|Fortnite|Lego|TikTok|YouTube|Instagram|Netflix|Google|Podcast|Text message|Voicemail|Email|Hashtag|Meme|Vlog|Influencer|Time machine|Teleport|Invisibility|Superpower|Magic wand|Haunted house|Escape room|Bouncy castle|Water park|Theme park|Arcade|Bowling alley|Swimming pool|Gym|Playground|Supermarket|Petrol station|Car park|Airport|Train station|Lift|Escalator|Traffic lights|Zebra crossing|Roundabout|Motorway|Speeding ticket|Parking ticket|Flat tyre|Power cut|Fire drill|Birthday cake|Wish|Secret|Promise|Lie|Riddle|Rumour|Habit|Hobby|Weekend|Summer holiday|Snow day|Rainy day|Jet lag|Headache|Toothache|Sunburn|Common cold|Chickenpox|Vaccine|X-ray|Anniversary|Retirement|First day of school|Homesick|Boredom|Fear|Love|Anger|Luck|Friendship|Peace|Diet|Midnight|Snooze button|Low battery|Selfie stick|Lunchbox note|Group chat|Video call|Online shopping|Pocket money|Piggyback|Pillow fight|Tug of war|Musical chairs|Pass the parcel|Rock paper scissors|Thumb war|Hot potato|Simon says|Tag|Truth or dare|Charades|Treasure hunt|Wedding cake|Gold medal|Penalty shootout|Extra time|Half time|Offside|Own goal|Hat-trick|Slam dunk|Home run|Knockout|Photo finish',
+  nature: 'Elephant|Sunflower|Volcano|Rainbow|Octopus|Tornado|Penguin|Cactus|Waterfall|Butterfly|Giraffe|Mushroom|Thunder|Earthquake|Oak tree|Dolphin|Kangaroo|Snowflake|Hedgehog|Jellyfish|Eagle|Crocodile|Glacier|Lightning|Hurricane|Coral reef|Rose|Daisy|Owl|Bee|Spider|Shark|Whale|Lion|Tiger|Zebra|Panda|Koala|Gorilla|Flamingo|Peacock|Parrot|Snail|Worm|Frog|Tortoise|Rabbit|Squirrel|Fox|Wolf|Polar bear|Deer|Camel|Horse|Cow|Sheep|Pig|Chicken|Duck|Swan|Ant|Ladybird|Caterpillar|Seaweed|Iceberg|Cloud|Fog|Sunrise|Moon|Star|Comet|Pebble|Sand dune|River|Island|Cave|Forest|Jungle|Puddle|Acorn|Pine cone|Tulip|Bamboo|Coconut|Hailstone|Bat|Hamster|Goldfish|Mosquito|Seagull|Bluebell|Nettle|Sunset|Alligator|Anteater|Armadillo|Badger|Beaver|Bison|Buffalo|Cheetah|Chimpanzee|Chipmunk|Cobra|Crab|Crow|Cuckoo|Dragonfly|Donkey|Eel|Falcon|Ferret|Firefly|Gecko|Gerbil|Goat|Goose|Grasshopper|Guinea pig|Hare|Hippo|Hornet|Hummingbird|Hyena|Iguana|Jaguar|Kingfisher|Kiwi bird|Lamb|Leopard|Lizard|Llama|Lobster|Magpie|Meerkat|Mole|Moose|Moth|Mouse|Ostrich|Otter|Oyster|Panther|Pelican|Pigeon|Piranha|Platypus|Porcupine|Puffin|Puppy|Kitten|Python|Raccoon|Rat|Raven|Reindeer|Rhino|Robin|Salmon|Scorpion|Seahorse|Seal|Skunk|Sloth|Slug|Sparrow|Squid|Starfish|Stingray|Stork|Swallow|Toad|Toucan|Turtle|Vulture|Walrus|Wasp|Woodpecker|Yak|Apple tree|Blossom|Buttercup|Cherry blossom|Clover|Conker|Daffodil|Dandelion|Fern|Grass|Hedge|Holly|Ivy|Lavender|Lily|Maple leaf|Moss|Orchid|Palm tree|Pumpkin|Poppy|Rainforest|Seed|Thistle|Venus flytrap|Weed|Willow tree|Blizzard|Breeze|Drizzle|Drought|Flood|Frost|Heatwave|Mist|Monsoon|Rain|Snow|Storm|Sunshine|Thunderstorm|Tsunami|Wind|Asteroid|Black hole|Constellation|Eclipse|Galaxy|Jupiter|Mars|Meteor|Milky Way|Neptune|Planet|Saturn|Shooting star|Sun|Universe|Venus|Earth|Avalanche|Beach|Canyon|Cliff|Desert|Field|Hill|Lake|Meadow|Mountain|Ocean|Pond|Rock|Sea|Stream|Swamp|Tide|Valley|Wave|Crystal|Diamond|Fossil|Gold|Lava|Mud|Shell|Soil|Feather|Nest|Spider web|Beehive|Anthill|Cocoon|Tadpole|Frogspawn|Pine tree|Christmas tree|Bonsai tree|Rose bush|Strawberry plant|Sunflower seed|Coral|Plankton|Killer whale|Blue whale|Hammerhead shark|Clownfish|Pufferfish|Barn owl|Bald eagle|Golden retriever|Sheepdog|Poodle|Dalmatian|Chihuahua|Bulldog|Persian cat|Pony|Stallion'
 };
 Object.keys(WORDS).forEach(k => { WORDS[k] = WORDS[k].split('|'); });
 
@@ -391,7 +395,6 @@ const sfx = {
   foul: () => { tone(220, .12, 'square', .1); tone(180, .16, 'square', .1, .1); },
   buzz: () => { tone(150, .75, 'sawtooth', .2); tone(156, .75, 'sawtooth', .16); },
   step: () => tone(540, .05, 'sine', .09),
-  spade: () => [392, 523, 392, 659].forEach((fq, i) => tone(fq, .14, 'square', .08, i * .1)),
   spinner: () => [523, 659, 784, 659].forEach((fq, i) => tone(fq, .12, 'triangle', .14, i * .09)),
   flag: () => [700, 520, 700].forEach((fq, i) => tone(fq, .1, 'square', .09, i * .11)),
   win: () => [523, 659, 784, 1047, 784, 1047].forEach((fq, i) => tone(fq, .22, 'triangle', .2, i * .12))
@@ -404,7 +407,8 @@ function buildSpaces(n) {
   const sp = [];
   for (let i = 0; i < n; i++) {
     const inner = i > 0 && i < n - 1;
-    sp.push({ cat: ORDER[i % 6], spade: inner && i % 7 === 4, spin: inner && i > 1 && i % 7 === 1 });
+    const spade = inner && i % 7 === 4;
+    sp.push({ cat: spade ? 'any' : ORDER[i % 6], spade, spin: inner && i > 1 && i % 7 === 1 });
   }
   return sp;
 }
@@ -413,12 +417,14 @@ function spinBadge(r) {
 }
 function boardSVG(spaces, withTokens) {
   const n = spaces.length, step = 360 / n, fs = n <= 30 ? 8.6 : n <= 40 ? 7.6 : 6.8;
-  let out = `<circle class="board-shadow" cx="200" cy="206" r="${R1 + 6}"/><circle class="plate" cx="200" cy="200" r="${R1 + 6}"/>`;
+  /* each board copy needs its own gradient id: a hidden copy can't paint the visible one */
+  const gid = withTokens ? 'anyFillGame' : 'anyFillHome';
+  let out = `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">${['object', 'action', 'world', 'person', 'random', 'nature'].map((c, k) => `<stop offset="${k / 5}" style="stop-color:var(--c-${c})"/>`).join('')}</linearGradient></defs>` + `<circle class="board-shadow" cx="200" cy="206" r="${R1 + 6}"/><circle class="plate" cx="200" cy="200" r="${R1 + 6}"/>`;
   spaces.forEach((s, i) => {
     const a0 = -90 + i * step, a1 = a0 + step, mid = a0 + step / 2, fin = i === n - 1;
     const [x1, y1] = polar(R1, a0), [x2, y2] = polar(R1, a1), [x3, y3] = polar(R0, a1), [x4, y4] = polar(R0, a0);
     const label = i === 0 ? 'Start' : fin ? 'Finish' : `Space ${i}`;
-    out += `<path class="seg ${fin ? 'seg-finish' : 'seg-' + s.cat}" d="M${f1(x1)} ${f1(y1)}A${R1} ${R1} 0 0 1 ${f1(x2)} ${f1(y2)}L${f1(x3)} ${f1(y3)}A${R0} ${R0} 0 0 0 ${f1(x4)} ${f1(y4)}Z"><title>${label} · ${fin ? 'final challenge' : CAT[s.cat]}${s.spade ? ' · spade' : ''}${s.spin ? ' · spinner' : ''}</title></path>`;
+    out += `<path class="seg ${fin ? 'seg-finish' : 'seg-' + s.cat}"${s.cat === 'any' && !fin ? ` fill="url(#${gid})"` : ''} d="M${f1(x1)} ${f1(y1)}A${R1} ${R1} 0 0 1 ${f1(x2)} ${f1(y2)}L${f1(x3)} ${f1(y3)}A${R0} ${R0} 0 0 0 ${f1(x4)} ${f1(y4)}Z"><title>${label} · ${fin ? 'final challenge' : CAT[s.cat]}${s.spade ? ' · spade' : ''}${s.spin ? ' · spinner' : ''}</title></path>`;
     /* category name runs outward from the inner edge; flipped on the left half so it never reads upside down */
     const [lx, ly] = polar(R0 + 5, mid), flip = mid > 90;
     out += `<text class="seg-lbl ${fin ? 'lbl-finish' : 'lbl-' + s.cat}" font-size="${fs}" dy=".35em" text-anchor="${flip ? 'end' : 'start'}" transform="translate(${f1(lx)} ${f1(ly)}) rotate(${f1(flip ? mid + 180 : mid)})">${fin ? 'Finish' : CAT[s.cat]}</text>`;
@@ -435,7 +441,7 @@ function boardSVG(spaces, withTokens) {
 }
 function legendHTML() {
   return ORDER.map(c => `<li><span class="pill cat-${c}">${CAT[c]}</span></li>`).join('') +
-    `<li><span class="spade-key" aria-hidden="true">♠</span>Spade: bonus round, random category</li>` +
+    `<li><span class="spade-key" aria-hidden="true">♠</span>Spade: a word from any category</li>` +
     `<li><svg class="spin-key" viewBox="-11 -11 22 22" aria-hidden="true">${spinBadge(10)}</svg>Spinner: move any team ±1 or ±2</li>`;
 }
 function updateTokens(v) {
@@ -479,9 +485,21 @@ function animateLocal(a) {
 
 /* ================= HOST: the authoritative game ================= */
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+/* words already played in earlier games on this (host) device, so new games don't repeat them */
+function seenWords() { return (LS && getItem(LS, 'sps-seen')) || {}; }
 function draw(cat) {
-  if (!S.decks[cat] || !S.decks[cat].length) S.decks[cat] = shuffle(WORDS[cat].map((_, i) => i));
-  return { cat, word: WORDS[cat][S.decks[cat].pop()] };
+  if (cat === 'any') cat = ORDER[Math.floor(Math.random() * ORDER.length)];
+  const seen = seenWords();
+  if (!S.decks[cat] || !S.decks[cat].length) {
+    const used = new Set(seen[cat] || []);
+    let idx = WORDS[cat].map((_, i) => i).filter(i => !used.has(WORDS[cat][i]));
+    if (idx.length < 15) { idx = WORDS[cat].map((_, i) => i); seen[cat] = []; }
+    S.decks[cat] = shuffle(idx);
+  }
+  const word = WORDS[cat][S.decks[cat].pop()];
+  (seen[cat] = seen[cat] || []).push(word);
+  LS && setItem(LS, 'sps-seen', seen);
+  return { cat, word };
 }
 function newTurn(mode, cat, describer) { return { mode, cat, describer, card: null, parked: null, skipUsed: false, records: [], left: TURN_SECONDS, paused: false }; }
 function membersOf(ti, v = S) { return v.players.filter(p => p.team === ti); }
@@ -498,7 +516,7 @@ function newLobby(code) {
   return {
     phase: 'lobby', code, hostId: me, players: [{ id: me, name: myName, team: 0, online: true }],
     teamCount: 2, teamNames: DEFAULT_NAMES.slice(), len: 40, teams: [], spaces: [], cur: 0, decks: {},
-    turn: null, spade: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null
+    turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null
   };
 }
 function teamsReady() {
@@ -510,7 +528,7 @@ function teamsReady() {
 function startGame() {
   S.teams = Array.from({ length: S.teamCount }, (_, i) => ({ name: S.teamNames[i], color: TEAM_COLORS[i], pos: 0, desc: 0 }));
   S.spaces = buildSpaces(S.len);
-  Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+  Object.assign(S, { phase: 'idle', cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
 }
 
 /* host timer */
@@ -544,15 +562,12 @@ function onTimeUp() {
 function endTurnAdvance() {
   S.teams[S.cur].desc++;
   S.cur = (S.cur + 1) % S.teams.length;
-  Object.assign(S, { phase: 'idle', turn: null, spade: null, spinner: null, after: null, finalCat: null });
+  Object.assign(S, { phase: 'idle', turn: null, spinner: null, after: null, finalCat: null });
   broadcast();
 }
 function runAfter() {
   if (S.phase !== 'moving') return;
-  if (S.after === 'spade') {
-    S.spade = { cat: ORDER[Math.floor(Math.random() * ORDER.length)], by: S.cur };
-    S.phase = 'spade-intro'; S.after = null; broadcast();
-  } else if (S.after === 'spin') {
+  if (S.after === 'spin') {
     S.spinner = { by: S.cur, result: null, slice: null, id: null, at: 0 };
     S.phase = 'spin'; S.after = null; broadcast();
   } else endTurnAdvance();
@@ -675,28 +690,18 @@ function handleAct(pid, act, d) {
       const { from, to } = moveTeam(S.cur, n);
       S.last = n === 0 ? `${t.name} didn't get any this time.` : `${t.name} got ${n} right and moved to ${posLabel(to)}.`;
       const land = to > from && to < S.len - 1 ? S.spaces[to] : null;
-      /* a bonus round's move doesn't set off another spade or spinner */
-      if (tr.mode === 'spade') { S.after = 'next'; S.last = '♠ Bonus round: ' + S.last; }
-      else S.after = land && land.spade ? 'spade' : land && land.spin ? 'spin' : 'next';
-    },
-    /* anyone on the team can start the bonus round; whoever taps it describes */
-    spadeGo() {
-      if (ph !== 'spade-intro' || (p.team !== S.cur && !host)) return;
-      S.turn = newTurn('spade', S.spade.cat, p.team === S.cur ? pid : describerOf(S.cur, 1));
-      S.turn.card = draw(S.spade.cat);
-      S.phase = 'play';
-      hostStartTimer(onTimeUp);
+      S.after = land && land.spin ? 'spin' : 'next';
     },
     cont() { if (ph === 'final-fail') endTurnAdvance(); },
     rematch() {
       if (!host || ph !== 'win') return;
       S.teams.forEach(t => { t.pos = 0; t.desc = 0; });
-      Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+      Object.assign(S, { phase: 'idle', cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
     },
     toLobby() {
       if (!host) return;
       hostStopTimer();
-      Object.assign(S, { phase: 'lobby', teams: [], cur: 0, turn: null, spade: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+      Object.assign(S, { phase: 'lobby', teams: [], cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
     }
   };
   if (A[act]) { A[act](); broadcast(); }
@@ -839,7 +844,9 @@ function normalizeHost() {
   S.players.forEach(p => { p.online = p.id === me; });
   const tr = S.turn;
   if (S.phase === 'play') { if (tr.mode === 'final') { S.phase = 'idle'; S.turn = null; } else { tr.paused = true; } }
-  if (S.phase === 'spade-play') S.phase = 'spade-intro';
+  /* games saved before spades changed: drop the old spade round and rebuild the board */
+  if (S.phase === 'spade-play' || S.phase === 'spade-intro') { S.phase = 'moving'; S.after = 'next'; S.turn = null; }
+  if (S.len && S.phase !== 'lobby') S.spaces = buildSpaces(S.len);
   if (S.phase === 'moving') setTimeout(runAfter, 300);
 }
 
@@ -1017,7 +1024,6 @@ function effects(prev, v) {
   else if (pr && nr && v.phase === 'play' && nr.card && nr.card.foulBy && !(pr.card && pr.card.foulBy)) sfx.flag();
   if (pr && nr && v.phase === 'review' && nr.records.some((r, i) => r.status === 'challenged' && !(pr.records[i] && pr.records[i].status))) sfx.flag();
   if (v.phase !== prev.phase) {
-    if (v.phase === 'spade-intro') sfx.spade();
     if (v.phase === 'spin') sfx.spinner();
     if (v.phase === 'play') keepAwake();
     if (v.phase === 'win') { sfx.win(); confetti(); }
@@ -1199,11 +1205,12 @@ const STAGE = {
     const isD = tr.describer === me, mine = teamOf(me, v), host = role === 'host';
     const dName = esc(nameOf(tr.describer, v));
     const top = `<div class="play-top">${timerHTML()}<div class="tally">${fin ? '<b>1</b><span>to win</span>' : `<b>${got}</b><span>correct</span>`}</div></div>`;
-    const band = (fin ? 'Final · ' : tr.mode === 'spade' ? '♠ Bonus · ' : '') + CAT[tr.cat];
+    const cc = tr.card && tr.card.cat || tr.cat;
+    const band = (fin ? 'Final · ' : tr.cat === 'any' ? '♠ Any · ' : '') + CAT[cc];
     const fb = tr.card && tr.card.foulBy;
     if (isD) {
       return `<div class="stage-inner">${top}
-        ${cardHTML(tr.cat, tr.paused ? 'Paused' : esc(tr.card.word), band, esc(t.name), tr.paused ? 'paused' : '')}
+        ${cardHTML(cc, tr.paused ? 'Paused' : esc(tr.card.word), band, esc(t.name), tr.paused ? 'paused' : '')}
         ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))} called foul</b> on this card. If you did say the word or part of it, tap "Said the word". If you didn't, keep going: the host decides after the turn.</div>` : ''}
         <div class="parked">${tr.parked
           ? `<span>Skipped: <b>${tr.paused ? '•••' : esc(tr.parked.word)}</b></span><button class="btn btn-small" data-act="useParked" ${tr.paused ? 'disabled' : ''}>Switch back to it</button>`
@@ -1221,7 +1228,7 @@ const STAGE = {
     }
     if (mine === v.cur) {
       return `<div class="stage-inner">${top}
-        <div class="guess cat-${tr.cat}"><b>${tr.paused ? 'Paused' : 'Guess!'}</b><span>${dName} is describing ${fin ? 'the final' : tr.cat === 'object' || tr.cat === 'action' ? 'an' : 'a'} ${CAT[tr.cat]} word</span></div>
+        <div class="guess cat-${tr.cat}"><b>${tr.paused ? 'Paused' : 'Guess!'}</b><span>${dName} is describing ${tr.cat === 'any' ? 'words from any category' : `${fin ? 'the final' : tr.cat === 'object' || tr.cat === 'action' ? 'an' : 'a'} ${CAT[tr.cat]} word`}</span></div>
         <p class="sub">Shout your answers out loud${fin ? '. One right answer wins the game!' : '. Every right answer moves your team one space.'}</p>
         ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))}</b> called foul on this card. The host decides after the turn.</div>` : ''}
         ${host ? `<div class="row"><button class="link" data-act="pause">${tr.paused ? 'Resume' : 'Pause'}</button></div>` : ''}
@@ -1229,7 +1236,7 @@ const STAGE = {
     }
     return `<div class="stage-inner">${top}
       <p class="eyebrow">${esc(t.name)} is playing · ${dName} describes</p>
-      ${cardHTML(tr.cat, tr.paused ? 'Paused' : esc(tr.card.word), band, 'You can see it', tr.paused ? 'paused' : '')}
+      ${cardHTML(cc, tr.paused ? 'Paused' : esc(tr.card.word), band, 'You can see it', tr.paused ? 'paused' : '')}
       <div class="note">You're on another team, so you can see the word. <b>Keep quiet</b> and listen. If ${dName} says the word or part of it, call a foul. You can also challenge any card after the turn.</div>
       ${mine == null ? '' : fb
         ? `<button class="btn btn-foul btn-lg" disabled>🚩 Foul called by ${esc(nameOf(fb, v))}</button>`
@@ -1268,10 +1275,10 @@ const STAGE = {
       (host ? ' You\'re the host, so you decide every foul.' : ' The host decides every foul.');
     const line = fin
       ? (n ? 'Final card correct.' : 'The final card doesn\'t count.')
-      : `Move forward <b>${n}</b> ${n === 1 ? 'space' : 'spaces'}${n > 0 && to === v.len - 1 ? ' to the finish!' : tr.mode === 'spade' ? '' : n > 0 && land.spade ? ', onto a spade!' : n > 0 && land.spin ? ', onto a spinner!' : ''}`;
+      : `Move forward <b>${n}</b> ${n === 1 ? 'space' : 'spaces'}${n > 0 && to === v.len - 1 ? ' to the finish!' : n > 0 && land.spade ? ', onto a spade (any category next turn)!' : n > 0 && land.spin ? ', onto a spinner!' : ''}`;
     const label = pending ? 'Waiting for the host to decide' : fin ? (n ? 'Confirm the win' : 'End turn') : n ? `Move ${esc(t.name)}` : 'End turn';
     return `<div class="stage-inner">
-      <p class="eyebrow">${esc(t.name)}${tr.mode === 'spade' ? ' · ♠ bonus round' : ''}</p>
+      <p class="eyebrow">${esc(t.name)}</p>
       <h2>${fin && n ? 'They got it!' : "Time's up!"}</h2>
       <p class="sub">${intro}</p>
       <ul class="review-list">${items}</ul>
@@ -1297,19 +1304,6 @@ const STAGE = {
         const to = Math.max(0, Math.min(v.len - 1, t.pos + sp.result));
         return `<button class="btn spin-btn" style="--team:${t.color}" data-act="spinPick" data-i="${i}"><b>${fwd ? 'Move' : 'Send back'} ${esc(t.name)}${i === mine ? ' (your team)' : ''}</b><span>${to === t.pos ? `Can't move from ${posLabel(t.pos, v)}` : `${cap(posLabel(t.pos, v))} → ${posLabel(to, v)}`}</span></button>`;
       }).join('')}</div>` : ''}
-    </div>`;
-  },
-  'spade-intro'(v) {
-    const sp = v.spade, by = v.teams[sp.by], mine = teamOf(me, v), ours = mine === sp.by, host = role === 'host';
-    return `<div class="stage-inner">
-      <div class="spade-big" aria-hidden="true">♠</div>
-      <p class="eyebrow">Spade · bonus round for ${esc(by.name)} only</p>
-      <h2>${ours ? 'You landed on a spade!' : esc(by.name) + ' landed on a spade!'}</h2>
-      <div class="cat-block cat-${sp.cat}"><span>Random category</span><b>${CAT[sp.cat]}</b><span>${HINT[sp.cat]}</span></div>
-      <p class="sub">${ours ? 'Your team gets another 30 seconds. Anyone on your team can start it: whoever taps Start describes.' : `${esc(by.name)} get another 30 seconds in this category. The usual rules apply, and you can call fouls.`}</p>
-      ${ours ? `<button class="btn btn-go btn-lg" data-act="spadeGo">Start, I'm describing</button>`
-        : host ? `<button class="btn btn-go btn-lg" data-act="spadeGo">Start for ${esc(by.name)}</button>`
-        : `<p class="sub">Waiting for someone on ${esc(by.name)} to start…</p>`}
     </div>`;
   },
   'final-choose'(v) {
@@ -1409,7 +1403,7 @@ function openRules() {
       <li><b>Only the host decides.</b> On a challenged card the host taps Foul (the card doesn't count) or Fair (it counts). The host can also rule any counted card a foul without a challenge.</li>
       <li>The final card can be challenged too, before the win counts.</li>
     </ul></section>
-    <section><h3>Spades ♠</h3><p>End your turn on a spade and your team gets a bonus round: another 30 seconds in a random category, for your team only. Anyone on your team can start it, and whoever taps Start describes. The usual rules apply (1 skip, fouls, challenges). Moving after a bonus round doesn't set off another spade or spinner.</p></section>
+    <section><h3>Spades ♠</h3><p>A spade space has no single category. When your turn starts on one, every card can come from any category. It's a normal turn, not an extra go.</p></section>
     <section><h3>Spinners</h3><p>End your turn on a spinner space (the red and green circle) and your team spins the wheel: +1, +2, −1 or −2. Then you choose any team to move by that amount: your own team, or a team you want to slow down. Moving because of the spinner doesn't set off another spade or spinner.</p></section>
     <section><h3>Winning</h3><p>Reaching the finish isn't enough. On your next turn, the other teams choose a category and you must get 1 card right in 30 seconds. Miss it and try again next turn. The first team to pass the final challenge wins.</p></section>
   </div>`;
