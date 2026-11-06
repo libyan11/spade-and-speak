@@ -255,14 +255,10 @@ button.rv { cursor: pointer; }
 .foul-banner b { color: #FF8A8F; }
 .btn-foul { background: #D9363E; color: #fff; box-shadow: 0 4px 0 #9E1F26; }
 .btn-fair { background: var(--good); color: #fff; box-shadow: 0 4px 0 var(--good-deep); }
-.btn.picked { outline: 3px solid #FFD66B; outline-offset: 2px; }
 .rv-item { display: flex; flex-direction: column; gap: 6px; }
 .rv.flag { box-shadow: inset 0 0 0 2px #FF5A63; }
 .rv-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .rv-actions .btn { font-size: .8rem; padding: .4em .7em; border-radius: 10px; }
-.vote-box { border-radius: 18px; padding: 16px; background: var(--stage-line); display: flex; flex-direction: column; gap: 12px; box-shadow: inset 0 0 0 2px #FF5A63; }
-.vote-box h3 { font-size: 1.4rem; }
-.vote-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stage-status { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); right: max(12px, env(safe-area-inset-right, 0px)); z-index: 55; font-size: .8rem; font-weight: 700; background: var(--c-action); color: #fff; padding: 4px 10px; border-radius: 999px; }
 
 .modal { position: fixed; inset: 0; z-index: 80; background: rgba(10, 8, 30, .62); display: flex; padding: 16px; overflow-y: auto; }
@@ -507,7 +503,7 @@ function newLobby(code) {
   return {
     phase: 'lobby', code, hostId: me, players: [{ id: me, name: myName, team: 0, online: true }],
     teamCount: 2, teamNames: DEFAULT_NAMES.slice(), len: 40, teams: [], spaces: [], cur: 0, decks: {},
-    turn: null, spade: null, spinner: null, vote: null, last: null, after: null, anim: null, winner: null, finalCat: null
+    turn: null, spade: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null
   };
 }
 function teamsReady() {
@@ -519,7 +515,7 @@ function teamsReady() {
 function startGame() {
   S.teams = Array.from({ length: S.teamCount }, (_, i) => ({ name: S.teamNames[i], color: TEAM_COLORS[i], pos: 0, desc: 0 }));
   S.spaces = buildSpaces(S.len);
-  Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+  Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
 }
 
 /* host timer */
@@ -553,7 +549,7 @@ function onTimeUp() {
 function endTurnAdvance() {
   S.teams[S.cur].desc++;
   S.cur = (S.cur + 1) % S.teams.length;
-  Object.assign(S, { phase: 'idle', turn: null, spade: null, spinner: null, vote: null, after: null, finalCat: null });
+  Object.assign(S, { phase: 'idle', turn: null, spade: null, spinner: null, after: null, finalCat: null });
   broadcast();
 }
 function runAfter() {
@@ -575,17 +571,6 @@ function moveTeam(ti, n) {
   return { from, to };
 }
 function posLabel(p, v = S) { return p === 0 ? 'the start' : p === v.len - 1 ? 'the finish' : 'space ' + p; }
-
-/* foul votes: everyone online except the describer; more "foul" than "fair" removes the card, a tie keeps it */
-function voters() { return S.players.filter(x => x.online && x.id !== S.turn.describer); }
-function checkVote() { if (S.vote && voters().every(x => S.vote.votes[x.id])) resolveVote(); }
-function resolveVote() {
-  const r = S.turn.records[S.vote.i], vs = Object.values(S.vote.votes);
-  const foul = vs.filter(x => x === 'foul').length, fair = vs.length - foul;
-  if (foul > fair) { r.status = 'upheld'; r.ok = false; r.res = 'foul'; } else r.status = 'fair';
-  r.tally = { foul, fair };
-  S.vote = null;
-}
 
 function handleAct(pid, act, d) {
   d = d || {};
@@ -642,22 +627,14 @@ function handleAct(pid, act, d) {
       if (ph !== 'review' || !r || !r.ok || r.status || p.team == null || p.team === S.cur) return;
       r.status = 'challenged'; r.foulBy = pid;
     },
-    acceptFoul() {
+    /* only the host decides whether a card was a foul: on a challenged card, or on any card that counted */
+    rule() {
       const r = tr && tr.records[+d.i];
-      if (ph !== 'review' || !r || r.status !== 'challenged' || !(p.team === S.cur || host)) return;
-      r.status = 'upheld'; r.ok = false; r.res = 'foul';
+      if (!host || ph !== 'review' || !r || !['foul', 'fair'].includes(d.choice)) return;
+      if (!(r.status === 'challenged' || (r.ok && !r.status))) return;
+      if (d.choice === 'foul') { r.status = 'upheld'; r.ok = false; r.res = 'foul'; }
+      else if (r.status === 'challenged') r.status = 'fair';
     },
-    dispute() {
-      const r = tr && tr.records[+d.i];
-      if (ph !== 'review' || !r || r.status !== 'challenged' || S.vote || !(p.team === S.cur || host)) return;
-      r.status = 'voting'; S.vote = { i: +d.i, votes: {} };
-      checkVote();
-    },
-    vote() {
-      if (ph !== 'review' || !S.vote || pid === tr.describer || !['foul', 'fair'].includes(d.choice)) return;
-      S.vote.votes[pid] = d.choice; checkVote();
-    },
-    endVote() { if (host && ph === 'review' && S.vote) resolveVote(); },
     spin() {
       const sp = S.spinner;
       if (ph !== 'spin' || sp.result != null || !(p.team === sp.by || host)) return;
@@ -692,9 +669,12 @@ function handleAct(pid, act, d) {
       if (tr.paused) { tr.paused = false; hostStartTimer(); }
       else { tr.left = remaining() / 1000; hostStopTimer(); tr.paused = true; }
     },
-    toggle() { const r = tr && tr.records[+d.i]; if (ph === 'review' && isD && r && !r.status) r.ok = !r.ok; },
+    toggle() {
+      const r = tr && tr.records[+d.i];
+      if (ph === 'review' && r && !r.status && (host || (isD && r.res !== 'foul'))) r.ok = !r.ok;
+    },
     confirmMove() {
-      if (ph !== 'review' || !isD || S.vote || tr.records.some(r => r.status === 'challenged')) return;
+      if (ph !== 'review' || !isD || tr.records.some(r => r.status === 'challenged')) return;
       const t = S.teams[S.cur], n = tr.records.filter(r => r.ok).length;
       if (tr.mode === 'final') { if (n > 0) { S.winner = S.cur; S.phase = 'win'; } else S.phase = 'final-fail'; return; }
       const { from, to } = moveTeam(S.cur, n);
@@ -723,12 +703,12 @@ function handleAct(pid, act, d) {
     rematch() {
       if (!host || ph !== 'win') return;
       S.teams.forEach(t => { t.pos = 0; t.desc = 0; });
-      Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+      Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
     },
     toLobby() {
       if (!host) return;
       hostStopTimer();
-      Object.assign(S, { phase: 'lobby', teams: [], cur: 0, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+      Object.assign(S, { phase: 'lobby', teams: [], cur: 0, turn: null, spade: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
     }
   };
   if (A[act]) { A[act](); broadcast(); }
@@ -866,7 +846,6 @@ function hostDrop(c) {
   if (c.pid && ![...conns].some(x => x.pid === c.pid)) {
     const p = S.players.find(x => x.id === c.pid);
     if (p) p.online = false;
-    checkVote();
     broadcast();
   }
 }
@@ -1051,7 +1030,6 @@ function effects(prev, v) {
   } else if (pr && nr && !pr.parked && nr.parked) sfx.skip();
   else if (pr && nr && v.phase === 'play' && nr.card && nr.card.foulBy && !(pr.card && pr.card.foulBy)) sfx.flag();
   if (pr && nr && v.phase === 'review' && nr.records.some((r, i) => r.status === 'challenged' && !(pr.records[i] && pr.records[i].status))) sfx.flag();
-  if (v.vote && !prev.vote) sfx.flag();
   if (v.phase !== prev.phase) {
     if (v.phase === 'spade-intro') sfx.spade();
     if (v.phase === 'spin') sfx.spinner();
@@ -1240,7 +1218,7 @@ const STAGE = {
     if (isD) {
       return `<div class="stage-inner">${top}
         ${cardHTML(tr.cat, tr.paused ? 'Paused' : esc(tr.card.word), band, esc(t.name), tr.paused ? 'paused' : '')}
-        ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))} called foul</b> on this card. If you did say the word or part of it, tap "Said the word". If you didn't, keep going: it gets settled after the turn.</div>` : ''}
+        ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))} called foul</b> on this card. If you did say the word or part of it, tap "Said the word". If you didn't, keep going: the host decides after the turn.</div>` : ''}
         <div class="parked">${tr.parked
           ? `<span>Skipped: <b>${tr.paused ? '•••' : esc(tr.parked.word)}</b></span><button class="btn btn-small" data-act="useParked" ${tr.paused ? 'disabled' : ''}>Switch back to it</button>`
           : `<span class="small-hint">${tr.skipUsed ? 'Skip used this turn.' : 'You have 1 skip this turn.'}</span>`}</div>
@@ -1259,7 +1237,7 @@ const STAGE = {
       return `<div class="stage-inner">${top}
         <div class="guess cat-${tr.cat}"><b>${tr.paused ? 'Paused' : 'Guess!'}</b><span>${dName} is describing ${fin ? 'the final' : tr.cat === 'object' || tr.cat === 'action' ? 'an' : 'a'} ${CAT[tr.cat]} word</span></div>
         <p class="sub">Shout your answers out loud${fin ? '. One right answer wins the game!' : '. Every right answer moves your team one space.'}</p>
-        ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))}</b> called foul on this card. It gets settled after the turn.</div>` : ''}
+        ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))}</b> called foul on this card. The host decides after the turn.</div>` : ''}
         ${host ? `<div class="row"><button class="link" data-act="pause">${tr.paused ? 'Resume' : 'Pause'}</button></div>` : ''}
       </div>`;
     }
@@ -1277,54 +1255,39 @@ const STAGE = {
     const tr = v.turn, t = v.teams[v.cur], n = tr.records.filter(r => r.ok).length, fin = tr.mode === 'final';
     const mine = teamOf(me, v), host = role === 'host';
     const can = tr.describer === me || host;          // fix cards and confirm
-    const side = mine === v.cur || host;              // accept or dispute a challenge
     const opp = mine != null && mine !== v.cur;       // raise a challenge
-    const pending = !!v.vote || tr.records.some(r => r.status === 'challenged');
+    const pending = tr.records.some(r => r.status === 'challenged');
     const to = Math.min(v.len - 1, t.pos + n), land = v.spaces[to];
-    const vote = v.vote, vr = vote && tr.records[vote.i];
-    let voteBox = '';
-    if (vote) {
-      const elig = v.players.filter(p => p.online && p.id !== tr.describer), done = elig.filter(p => vote.votes[p.id]).length, mv = vote.votes[me];
-      voteBox = `<div class="vote-box">
-        <p class="eyebrow">Foul vote</p>
-        <h3>Did ${esc(nameOf(tr.describer, v))} say “${esc(vr.word)}” or part of it?</h3>
-        <p class="small-hint">${esc(who(vr.foulBy, v))} called foul and ${esc(t.name)} disputed it. Everyone except the describer votes. If more people vote foul, the card doesn't count. A tie means it counts.</p>
-        ${me === tr.describer ? '<p>You described this card, so you don\'t vote.</p>' : `<div class="vote-row">
-          <button class="btn btn-foul ${mv === 'foul' ? 'picked' : ''}" data-act="vote" data-choice="foul" aria-pressed="${mv === 'foul'}">Foul: don't count it</button>
-          <button class="btn btn-fair ${mv === 'fair' ? 'picked' : ''}" data-act="vote" data-choice="fair" aria-pressed="${mv === 'fair'}">Fair: it counts</button></div>`}
-        <div class="row"><span class="small-hint">${done} of ${elig.length} voted${mv ? ' · you can still change your vote' : ''}</span>${host ? '<button class="link" data-act="endVote">End the vote now</button>' : ''}</div>
-      </div>`;
-    }
     const items = tr.records.map((r, i) => {
-      const flag = r.status === 'challenged' || r.status === 'voting';
-      const tally = r.tally ? ` (${r.tally.foul}–${r.tally.fair})` : '';
+      const flag = r.status === 'challenged';
       const tag = r.status === 'challenged' ? `🚩 Foul called by ${nameOf(r.foulBy, v)}`
-        : r.status === 'voting' ? '🚩 Being voted on'
-        : r.status === 'upheld' ? `🚩 Foul, not counted${tally}`
-        : r.status === 'fair' ? `✓ Challenge rejected${tally}`
+        : r.status === 'upheld' ? '🚩 Host ruled foul, not counted'
+        : r.status === 'fair' ? '✓ Host ruled fair, it counts'
         : r.ok ? '✓ Correct' : r.res === 'correct' ? 'Not counted' : RES_LABEL[r.res];
       const cls = `rv ${r.ok ? 'ok' : ''} ${flag ? 'flag' : ''}`;
       const body = `<span class="rv-word">${esc(r.word)}</span><span class="rv-tag">${esc(tag)}</span>`;
       let acts = '';
-      if (r.status === 'challenged' && side) acts = `<button class="btn btn-small" data-act="acceptFoul" data-i="${i}">Fair call, remove it</button><button class="btn btn-small" data-act="dispute" data-i="${i}" ${vote ? 'disabled' : ''}>Dispute: vote on it</button>`;
-      else if (r.status === 'challenged') acts = `<span class="small-hint">Waiting for ${esc(t.name)} to accept or dispute</span>`;
+      if (r.status === 'challenged' && host) acts = `<button class="btn btn-small btn-foul" data-act="rule" data-choice="foul" data-i="${i}">🚩 Foul: don't count it</button><button class="btn btn-small btn-fair" data-act="rule" data-choice="fair" data-i="${i}">✓ Fair: it counts</button>`;
+      else if (r.status === 'challenged') acts = `<span class="small-hint">Waiting for the host to decide</span>`;
+      else if (host && r.ok && !r.status) acts = `<button class="btn btn-small" data-act="rule" data-choice="foul" data-i="${i}">🚩 Rule it a foul</button>`;
       else if (opp && r.ok && !r.status) acts = `<button class="btn btn-small" data-act="challenge" data-i="${i}">🚩 Challenge</button>`;
-      const box = can && !r.status ? `<button class="${cls}" data-act="toggle" data-i="${i}" aria-pressed="${r.ok}">${body}</button>` : `<div class="${cls}">${body}</div>`;
+      const canFlip = !r.status && (host || (tr.describer === me && r.res !== 'foul'));
+      const box = canFlip ? `<button class="${cls}" data-act="toggle" data-i="${i}" aria-pressed="${r.ok}">${body}</button>` : `<div class="${cls}">${body}</div>`;
       return `<li class="rv-item">${box}${acts ? `<div class="rv-actions">${acts}</div>` : ''}</li>`;
     }).join('');
-    const intro = fin
+    const intro = (fin
       ? (opp ? 'Think they broke a rule on the final card? Challenge it now, before they win.' : 'The other teams can challenge the card before the win counts.')
       : (can ? 'Check the cards. Tap one to change it, for example if the team shouted it right on the buzzer.' : `${esc(nameOf(tr.describer, v))} is checking the cards.`) +
-        (opp ? ' Think they said the word or part of it? Tap Challenge on that card.' : '');
+        (opp ? ' Think they said the word or part of it? Tap Challenge on that card.' : '')) +
+      (host ? ' You\'re the host, so you decide every foul.' : ' The host decides every foul.');
     const line = fin
       ? (n ? 'Final card correct.' : 'The final card doesn\'t count.')
       : `Move forward <b>${n}</b> ${n === 1 ? 'space' : 'spaces'}${n > 0 && to === v.len - 1 ? ' to the finish!' : n > 0 && land.spade ? ', onto a spade!' : n > 0 && land.spin ? ', onto a spinner!' : ''}`;
-    const label = pending ? 'Settle the challenge first' : fin ? (n ? 'Confirm the win' : 'End turn') : n ? `Move ${esc(t.name)}` : 'End turn';
+    const label = pending ? 'Waiting for the host to decide' : fin ? (n ? 'Confirm the win' : 'End turn') : n ? `Move ${esc(t.name)}` : 'End turn';
     return `<div class="stage-inner">
       <p class="eyebrow">${esc(t.name)}</p>
       <h2>${fin && n ? 'They got it!' : "Time's up!"}</h2>
       <p class="sub">${intro}</p>
-      ${voteBox}
       <ul class="review-list">${items}</ul>
       <p class="move-line">${line}</p>
       ${can ? `<button class="btn btn-go btn-lg" data-act="confirmMove" ${pending ? 'disabled' : ''}>${label}</button>` : ''}
@@ -1469,7 +1432,7 @@ function openRules() {
     <section><h3>Fouls and challenges 🚩</h3><ul>
       <li>The other teams can see the word. If the describer says it or part of it, tap <b>Call foul</b> during the turn. The describer sees the flag and can drop the card.</li>
       <li>After the turn, the other teams can also tap <b>Challenge</b> on any card that was counted.</li>
-      <li>The describing team either accepts (the card doesn't count) or disputes it. A dispute goes to a vote: everyone except the describer votes Foul or Fair. If more people vote foul, the card doesn't count. A tie means it counts.</li>
+      <li><b>Only the host decides.</b> On a challenged card the host taps Foul (the card doesn't count) or Fair (it counts). The host can also rule any counted card a foul without a challenge.</li>
       <li>The final card can be challenged too, before the win counts.</li>
     </ul></section>
     <section><h3>Spades ♠</h3><p>End your turn on a spade and everyone plays. One describer from each team gets the same word and they all describe at once. The first team to shout it moves forward 1 space.</p></section>
