@@ -345,6 +345,31 @@ const HARD_WORDS = {
 };
 const HARD = new Set();
 Object.keys(HARD_WORDS).forEach(k => { HARD_WORDS[k].split('|').forEach(w => { WORDS[k].push(w); HARD.add(w); }); });
+/* word modes. Normal: everyday words with a hard one now and then (as before).
+   Hard: only the harder words. Hardest: only the toughest. */
+const HARD_MORE = {
+  object: 'Barcode scanner|Carburettor|Chainsaw|Crowbar|Cufflinks|Dehumidifier|Drawbridge|Dreamcatcher|Egg timer|Fountain pen|Fuse box|Gas mask|Glockenspiel|Gyroscope|Hard hat|Hole punch|Incubator|Jackhammer|Jukebox|Lava lamp|Lawn sprinkler|Mannequin|Microchip|Mousetrap|Music stand|Nutcracker|Oil lamp|Dummy|Parasol|Pickaxe|Pinball machine|Pitchfork|Plimsolls|Pocket watch|Pressure cooker|Punchbag|Quiver|Router|Scarecrow|Scuba tank|Seesaw|Shoehorn|Slingshot|Soldering iron|Spinning top|Stilts|Tape dispenser|Tea strainer|Thermostat|Toast rack|Treadmill|Turntable|Vending machine|Welding mask|Wheelie bin|Windbreak|Cable tie',
+  action: 'Accelerating|Bickering|Bowing|Chanting|Cramming for an exam|Deleting|Diagnosing|Dodging|Downloading|Encouraging|Erupting|Fainting|Flinching|Frolicking|Glaring|Grovelling|Heckling|Hoarding|Interrupting|Jaywalking|Lurking|Mimicking|Nagging|Overtaking|Parallel parking|Pondering|Pouting|Quarrelling|Rationing|Reversing|Scavenging|Shushing|Simmering|Slouching|Smuggling|Snooping|Stammering|Strolling|Stumbling|Swerving|Tinkering|Trespassing|Unscrewing|Uploading|Wading|Waddling|Wheezing|Wriggling|Busking|Paragliding|Jet skiing|Parkour|Caving|Beekeeping|Pottery|Origami',
+  world: 'Accra|Addis Ababa|Amman|Ankara|Auckland|Baghdad|Belfast|Belgrade|Bern|Bogota|Bucharest|Canberra|Caracas|Damascus|Dhaka|Dubrovnik|Hanoi|Islamabad|Jakarta|Kabul|Kampala|Khartoum|Kyiv|Kuala Lumpur|Lima|Manila|Montreal|Muscat|New Orleans|Ottawa|Perth|Quebec|Quito|Rabat|Riga|Salzburg|Santiago|Sofia|Taipei|Tallinn|Tehran|Tunis|Vilnius|Wellington|Zagreb|Lake Como|Loch Lomond|Isle of Skye|Jersey|Gibraltar|Bermuda|Tasmania|Borneo|Okinawa|Hokkaido|Bavaria|Tuscany|Provence|Normandy|Sardinia|Corsica|Algarve|Andalusia|Catalonia|Yukon|Alaska|Texas|California|Florida|Brooklyn|Manhattan',
+  person: 'Al Capone|Amy Winehouse|Anne Boleyn|Aretha Franklin|Audrey Hepburn|Bill Clinton|Bob Dylan|Boris Johnson|Brad Pitt|Buzz Aldrin|Che Guevara|Clint Eastwood|Johan Cruyff|Dalai Lama|David Bowie|Dolly Parton|Donald Trump|Elizabeth I|Emmeline Pankhurst|Enid Blyton|Ernest Hemingway|Fidel Castro|Frank Sinatra|George Michael|Gary Lineker|Guy Fawkes|Harriet Tubman|Helen Keller|Henry Ford|Hugh Grant|Jamie Oliver|Jane Goodall|Jennifer Aniston|Jim Carrey|Joe Biden|John F Kennedy|Johnny Depp|Keanu Reeves|Kate Middleton|King Charles|Kofi Annan|Leonardo DiCaprio|Louis Armstrong|Margaret Thatcher|Meghan Markle|Meryl Streep|Michelle Obama|Morgan Freeman|Oliver Cromwell|Ozzy Osbourne|Prince William|Quentin Tarantino|Ringo Starr|Robbie Williams|Ronaldinho|Sean Connery|Simon Cowell|Sylvester Stallone|Thierry Henry|Tom Hanks|Tony Blair|Vladimir Putin|Whitney Houston|William the Conqueror|Zlatan Ibrahimovic|Steven Gerrard|Riyad Mahrez|Sadio Mane|Didier Drogba|Jose Mourinho|Pep Guardiola|Jurgen Klopp|Alex Ferguson|Arsene Wenger|J K Rowling|Stan Lee|Hans Christian Andersen|Rudyard Kipling|Umm Kulthum|Amr Diab',
+  random: 'Applause|Bargain|Bribe|Budget|Ceasefire|Charity|Coincidence|Compromise|Confession|Curfew|Deadline|Debt|Dilemma|Disguise|Donation|Election|Excuse|Fortune|Grudge|Guilt|Heritage|Hint|Immigration|Interest rate|Invoice|Landlord|Legacy|Manifesto|Mascot|Mystery|Nickname|Obsession|Opinion|Parliament|Passport control|Patience|Pilgrimage|Poverty|Prejudice|Privacy|Protest|Puzzle|Receipt|Refund|Rehearsal|Reputation|Revenge|Rivalry|Salary|Sanctuary|Scandal|Scholarship|Sponsor|Stereotype|Strike|Subscription|Suspense|Taboo|Talent|Tradition|Treaty|Truce|Tuition|Uniform|Vacancy|Veto|Wisdom|Yearbook',
+  nature: 'Algae|Antelope|Beetle|Bonobo|Budgie|Bumblebee|Catfish|Cicada|Cockatoo|Cockroach|Condor|Cougar|Coyote|Dingo|Dormouse|Earwig|Emu|Flea|Gibbon|Hermit crab|Hyacinth|Kestrel|Koi carp|Lynx|Macaw|Mandrill|Marmot|Mayfly|Mink|Nightingale|Orangutan|Osprey|Partridge|Peregrine falcon|Pheasant|Prawn|Quail|Red squirrel|Rattlesnake|Sardine|Sea lion|Shrew|Snow leopard|Stag beetle|Swordfish|Trout|Tuna|Viper|Vole|Warthog|Weasel|Wren|Aloe vera|Birch tree|Chestnut tree|Chrysanthemum|Cotton plant|Foxglove|Geranium|Heather|Honeysuckle|Lotus|Magnolia|Marigold|Mistletoe|Olive tree|Pansy|Rhubarb|Sycamore|Tumbleweed|Violet|Water lily|Wheat|Dew|Gale|Hailstorm|Humidity|Lunar eclipse|Rainfall|Sleet|Smog|Thunderclap|Twilight|Whirlpool|Wildfire|Sandstorm'
+};
+const HARDEST_WORDS = {
+  object: 'Theodolite|Seismograph|Odometer|Altimeter|Anemometer|Hygrometer|Oscilloscope|Centrifuge|Carabiner|Cravat|Cummerbund|Ottoman|Chaise longue|Credenza|Armoire|Dumbwaiter|Trebuchet|Portcullis|Gauntlet|Chainmail|Sarcophagus|Sitar|Didgeridoo|Bassoon|Oboe|Harpsichord|Cello|Lute|Banjo|Castanets|Cymbals|Tuba|Bifocals|Scalpel|Forceps|Tourniquet|Mandoline slicer|Ramekin|Cafetiere|Samovar|Tagine|Tiara|Sceptre|Blood pressure cuff|Spinning jenny|Ear trumpet|Diving bell',
+  action: 'Hyperventilating|Philosophising|Plagiarising|Meandering|Ruminating|Sauntering|Scrutinising|Fermenting|Pickling|Embalming|Taxidermy|Calligraphy|Upholstering|Glassblowing|Blacksmithing|Falconry|Fly fishing|Synchronised swimming|Curling|Pole vaulting|Shot put|Javelin throwing|Triple jump|Hurdling|Moonlighting|Freewheeling|Mediating|Composting|Sanding|Plastering|Grouting|Wallpapering|Speed reading|Lip reading|Fact checking|Sign language|Ghost hunting|Bird watching|Code breaking|Bell ringing',
+  world: 'Ouagadougou|Antananarivo|Nouakchott|Ashgabat|Bishkek|Dushanbe|Thimphu|Vientiane|Phnom Penh|Port Moresby|Kiribati|Nauru|Palau|Comoros|Lesotho|Eswatini|Malawi|Burundi|Rwanda|Gabon|Togo|Benin|Chad|Niger|Mali|Mauritania|Guinea-Bissau|Sierra Leone|Liberia|Cape Verde|Belize|Honduras|Nicaragua|Guatemala|El Salvador|Paraguay|Guyana|Trinidad and Tobago|Barbados|Moldova|Belarus|Estonia|Latvia|Lithuania|Slovakia|Slovenia|North Macedonia|Albania|Kosovo|Brunei|East Timor|Krakatoa|Mount Elbrus|Aconcagua|Annapurna|K2|Lake Baikal|Okavango Delta|Ngorongoro Crater|Serengeti|Great Rift Valley|Bering Strait|Strait of Hormuz',
+  person: 'Hammurabi|Cicero|Herodotus|Euclid|Ptolemy|Ibn Rushd|Al-Idrisi|Ibn al-Haytham|Rumi|Omar Khayyam|Suleiman the Magnificent|Mehmed the Conqueror|Kublai Khan|Tamerlane|Akbar the Great|Ashoka|Cyrus the Great|Xerxes|Leonidas|Pericles|Spartacus|Nero|Caligula|Constantine|Max Planck|Niels Bohr|Werner Heisenberg|Erwin Schrodinger|Richard Feynman|Enrico Fermi|Rosalind Franklin|Dmitri Mendeleev|Michael Faraday|James Watt|Antoine Lavoisier|Carl Linnaeus|Edward Jenner|Joseph Lister|Mary Seacole|Grace Hopper|Tim Berners-Lee|Franz Kafka|Fyodor Dostoevsky|Victor Hugo|Goethe|Cervantes|Geoffrey Chaucer|Virginia Woolf|Sylvia Plath|Emily Dickinson|Walt Whitman|John Keats|Lord Byron|Mary Shelley|William Wordsworth|Caravaggio|Botticelli|Raphael|Donatello|Vermeer|Francisco Goya|J M W Turner|Gustav Klimt|Edvard Munch|Henri Matisse|Paul Cezanne|Wassily Kandinsky|Jackson Pollock|Claude Debussy|George Frideric Handel|Joseph Haydn|Franz Schubert|Richard Wagner|Igor Stravinsky|Giacomo Puccini|Giuseppe Verdi',
+  random: 'Bureaucracy|Capitalism|Socialism|Communism|Feminism|Globalisation|Gentrification|Hypothesis|Philanthropy|Hypocrisy|Nepotism|Plagiarism|Serendipity|Schadenfreude|Euphemism|Onomatopoeia|Alliteration|Hyperbole|Oxymoron|Satire|Allegory|Renaissance|Industrial Revolution|Cold War|Enlightenment|Reformation|Feudalism|Magna Carta|Constitution|Filibuster|Impeachment|Coup|Diplomacy|Sovereignty|Ambassador|Embassy|Asylum|Inheritance|Insurance|Stock market|Dividend|Supply and demand|Existentialism|Utopia|Dystopia|Zeitgeist|Entrepreneur|Encryption|Bandwidth|Cloud computing|Machine learning|Quantum physics|Relativity|Entropy|Momentum|Friction|Inertia|Velocity|Probability|Statistics|Calculus|Prime number|Square root|Pythagoras\' theorem',
+  nature: 'Bioluminescence|Chlorophyll|Symbiosis|Parasite|Camouflage|Echolocation|Germination|Decomposition|Osmosis|DNA|Bacteria|Virus|Fungus|Lichen|Continental drift|Pangaea|Sediment|Limestone|Granite|Quartz|Obsidian|Amber|Sinkhole|Oxbow lake|Water cycle|Jet stream|Trade winds|Cumulus cloud|Neutron star|Red giant|White dwarf|Quasar|Pulsar|Dark matter|Wormhole|Exoplanet|Andromeda galaxy|Orion\'s Belt|Halley\'s Comet|Kuiper belt|Dodo|Mammoth|Sabre-toothed tiger|Pterodactyl|Tyrannosaurus rex|Triceratops|Velociraptor|Stegosaurus|Brachiosaurus|Megalodon|Tardigrade|Blobfish|Anglerfish|Mantis shrimp|Cuttlefish|Nautilus|Aye-aye|Tasmanian devil|Quokka|Dugong|Cassowary|Shoebill|Fennec fox|Jerboa|Addax'
+};
+const MODES = { normal: 'Normal', hard: 'Hard', hardest: 'Hardest' };
+const MODE_HINT = { normal: 'Everyday words, a hard one now and then', hard: 'Harder words, still very guessable', hardest: 'The toughest words. Know your stuff!' };
+const POOLS = { normal: WORDS, hard: {}, hardest: {} };
+Object.keys(HARD_MORE).forEach(k => {
+  POOLS.hard[k] = HARD_WORDS[k].split('|').concat(HARD_MORE[k].split('|'));
+  POOLS.hardest[k] = HARDEST_WORDS[k].split('|');
+});
 
 const NS = 'http://www.w3.org/2000/svg';
 const R1 = 192, R0 = 116;
@@ -502,17 +527,18 @@ function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.fl
 function seenWords() { return (LS && getItem(LS, 'sps-seen')) || {}; }
 function draw(cat) {
   if (cat === 'any') cat = ORDER[Math.floor(Math.random() * ORDER.length)];
-  const seen = seenWords();
-  if (!S.decks[cat] || !S.decks[cat].length) {
+  const seen = seenWords(), mode = POOLS[S.words] ? S.words : 'normal', list = POOLS[mode][cat], key = mode + ':' + cat;
+  if (!S.decks[key] || !S.decks[key].length) {
     const used = new Set(seen[cat] || []);
-    let idx = WORDS[cat].map((_, i) => i).filter(i => !used.has(WORDS[cat][i]));
-    if (idx.length < 15) { idx = WORDS[cat].map((_, i) => i); seen[cat] = []; }
-    S.decks[cat] = shuffle(idx);
+    let idx = list.map((_, i) => i).filter(i => !used.has(list[i]));
+    if (idx.length < 15) { idx = list.map((_, i) => i); seen[cat] = (seen[cat] || []).filter(w => !list.includes(w)); }
+    S.decks[key] = shuffle(idx);
   }
-  const word = WORDS[cat][S.decks[cat].pop()];
+  const word = list[S.decks[key].pop()];
   (seen[cat] = seen[cat] || []).push(word);
   LS && setItem(LS, 'sps-seen', seen);
-  return { cat, word, hard: HARD.has(word) };
+  /* in Normal, the odd hard word is flagged on the card */
+  return { cat, word, hard: mode === 'normal' && HARD.has(word) };
 }
 function newTurn(mode, cat, describer) { const total = turnSecs(S.len); return { mode, cat, describer, card: null, parked: null, skipUsed: false, records: [], left: total, total, paused: false, note: null }; }
 function membersOf(ti, v = S) { return v.players.filter(p => p.team === ti); }
@@ -528,7 +554,7 @@ function describerOf(ti, offset = 0, v = S) {
 function newLobby(code) {
   return {
     phase: 'lobby', code, hostId: me, players: [{ id: me, name: myName, team: 0, online: true }],
-    teamCount: 2, teamNames: DEFAULT_NAMES.slice(), len: 40, teams: [], spaces: [], cur: 0, decks: {},
+    teamCount: 2, teamNames: DEFAULT_NAMES.slice(), len: 40, words: 'normal', teams: [], spaces: [], cur: 0, decks: {},
     turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null
   };
 }
@@ -616,6 +642,7 @@ function handleAct(pid, act, d) {
       S.players.forEach(x => { if (x.team != null && x.team >= S.teamCount) x.team = null; });
     },
     setLen() { if (host && ph === 'lobby' && [30, 40, 50].includes(+d.n)) S.len = +d.n; },
+    setWords() { if (host && ph === 'lobby' && MODES[d.choice]) S.words = d.choice; },
     rename() {
       if (!host || ph !== 'lobby') return;
       const i = +d.i; if (i >= 0 && i < 6) S.teamNames[i] = String(d.name || '').trim().slice(0, 24) || DEFAULT_NAMES[i];
@@ -1131,6 +1158,7 @@ function renderLobby(v) {
     ${host ? `<div class="settings">
       <div class="field"><span class="label" id="tcLabel">Teams</span><div class="seg-group" role="group" aria-labelledby="tcLabel">${[2, 3, 4, 5, 6].map(n => `<button data-act="setCount" data-n="${n}" aria-pressed="${n === v.teamCount}">${n}</button>`).join('')}</div></div>
       <div class="field"><span class="label" id="lnLabel">Board size</span><div class="seg-group" role="group" aria-labelledby="lnLabel">${[[30, 'Short · 30 · 20s'], [40, 'Standard · 40 · 25s'], [50, 'Long · 50 · 30s']].map(([n, l]) => `<button data-act="setLen" data-n="${n}" aria-pressed="${n === v.len}">${l}</button>`).join('')}</div></div>
+      <div class="field"><span class="label" id="wdLabel">Words</span><div class="seg-group" role="group" aria-labelledby="wdLabel">${Object.keys(MODES).map(m => `<button data-act="setWords" data-choice="${m}" aria-pressed="${m === (v.words || 'normal')}">${MODES[m]}</button>`).join('')}</div><p class="small-hint">${MODE_HINT[v.words || 'normal']}</p></div>
     </div>` : `<p class="muted">${v.teamCount} teams · ${v.len}-space board. The host can change these.</p>`}
     <div class="team-cols">${Array.from({ length: v.teamCount }, (_, i) => {
       const m = membersOf(i, v);
@@ -1450,6 +1478,7 @@ function openRules() {
       <li>The final card can be challenged too, before the win counts.</li>
     </ul></section>
     <section><h3>Spades ♠</h3><p>A spade space has no single category. When your turn starts on one, every card can come from any category. It's a normal turn, not an extra go.</p></section>
+    <section><h3>Word level</h3><p><b>Normal</b>: everyday words, with a harder one now and then (marked ★ Hard). <b>Hard</b>: only harder words, still guessable. <b>Hardest</b>: only the toughest words.</p></section>
     <section><h3>Spinners</h3><p>End your turn on a spinner space (the red and green circle) and your team spins the wheel: +1, +2, −1 or −2. Then you choose any team to move by that amount: your own team, or a team you want to slow down. Moving because of the spinner doesn't set off another spade or spinner.</p></section>
     <section><h3>Winning</h3><p>Reaching the finish isn't enough. On your next turn, the other teams choose a category and you must get 1 card right before the time runs out. Miss it and try again next turn. The first team to pass the final challenge wins.</p></section>
   </div>`;
