@@ -230,11 +230,6 @@ button.rv { cursor: pointer; }
 .move-line { font-size: 1.15rem; }
 .move-line b { font-family: var(--f-display); font-weight: 400; font-size: 2rem; color: #FFD66B; }
 .spade-big { width: 86px; height: 86px; border-radius: 26px; background: var(--stage-fg); color: var(--stage); display: grid; place-items: center; font-size: 3.2rem; transform: rotate(-8deg); }
-.team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
-.team-btn { background: var(--team); color: #fff; box-shadow: 0 4px 0 rgba(0, 0, 0, .35); font-size: 1.05rem; padding: .9em .8em; }
-.describers { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.describers li { display: flex; align-items: center; gap: 8px; background: var(--stage-line); border-radius: 999px; padding: 6px 12px 6px 8px; font-weight: 600; font-size: .92rem; }
-.describers .dot { box-shadow: none; }
 .cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .cat-btn { background: var(--cat); color: var(--cat-fg); box-shadow: 0 4px 0 rgba(0, 0, 0, .3); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px 16px; text-align: left; }
 .cat-btn b { font-family: var(--f-display); font-weight: 400; font-size: 1.5rem; line-height: 1.1; }
@@ -440,7 +435,7 @@ function boardSVG(spaces, withTokens) {
 }
 function legendHTML() {
   return ORDER.map(c => `<li><span class="pill cat-${c}">${CAT[c]}</span></li>`).join('') +
-    `<li><span class="spade-key" aria-hidden="true">♠</span>Spade: everyone plays</li>` +
+    `<li><span class="spade-key" aria-hidden="true">♠</span>Spade: bonus round, random category</li>` +
     `<li><svg class="spin-key" viewBox="-11 -11 22 22" aria-hidden="true">${spinBadge(10)}</svg>Spinner: move any team ±1 or ±2</li>`;
 }
 function updateTokens(v) {
@@ -555,7 +550,7 @@ function endTurnAdvance() {
 function runAfter() {
   if (S.phase !== 'moving') return;
   if (S.after === 'spade') {
-    S.spade = { cat: S.spaces[S.teams[S.cur].pos].cat, by: S.cur, card: null, descs: [], timeUp: false };
+    S.spade = { cat: ORDER[Math.floor(Math.random() * ORDER.length)], by: S.cur };
     S.phase = 'spade-intro'; S.after = null; broadcast();
   } else if (S.after === 'spin') {
     S.spinner = { by: S.cur, result: null, slice: null, id: null, at: 0 };
@@ -680,24 +675,17 @@ function handleAct(pid, act, d) {
       const { from, to } = moveTeam(S.cur, n);
       S.last = n === 0 ? `${t.name} didn't get any this time.` : `${t.name} got ${n} right and moved to ${posLabel(to)}.`;
       const land = to > from && to < S.len - 1 ? S.spaces[to] : null;
-      S.after = land && land.spade ? 'spade' : land && land.spin ? 'spin' : 'next';
+      /* a bonus round's move doesn't set off another spade or spinner */
+      if (tr.mode === 'spade') { S.after = 'next'; S.last = '♠ Bonus round: ' + S.last; }
+      else S.after = land && land.spade ? 'spade' : land && land.spin ? 'spin' : 'next';
     },
+    /* anyone on the team can start the bonus round; whoever taps it describes */
     spadeGo() {
-      if (ph !== 'spade-intro') return;
-      S.spade.card = draw(S.spade.cat);
-      S.spade.descs = S.teams.map((_, i) => describerOf(i, i === S.spade.by ? 1 : 0));
-      S.spade.timeUp = false;
-      S.turn = newTurn('spade', S.spade.cat, null);
-      S.phase = 'spade-play';
-      hostStartTimer(() => { S.spade.timeUp = true; broadcast(); });
-    },
-    spadeWin() {
-      if (ph !== 'spade-play' || !(host || S.spade.descs.includes(pid))) return;
-      hostStopTimer(); ht.onEnd = null;
-      const wi = +d.i, word = S.spade.card.word;
-      if (wi < 0 || !S.teams[wi]) { S.last = `Spade round: nobody got "${word}".`; endTurnAdvance(); return; }
-      moveTeam(wi, 1); S.after = 'next';
-      S.last = `Spade round: ${S.teams[wi].name} shouted "${word}" first and moved forward 1.`;
+      if (ph !== 'spade-intro' || (p.team !== S.cur && !host)) return;
+      S.turn = newTurn('spade', S.spade.cat, p.team === S.cur ? pid : describerOf(S.cur, 1));
+      S.turn.card = draw(S.spade.cat);
+      S.phase = 'play';
+      hostStartTimer(onTimeUp);
     },
     cont() { if (ph === 'final-fail') endTurnAdvance(); },
     rematch() {
@@ -717,7 +705,6 @@ function handleAct(pid, act, d) {
 /* what each player may see */
 function canSeeWord(pid) {
   if (!S.turn) return false;
-  if (S.phase === 'spade-play') return (S.spade.descs || []).includes(pid);
   return S.turn.describer === pid || teamOf(pid) !== S.cur;
 }
 function publicState(pid) {
@@ -727,7 +714,6 @@ function publicState(pid) {
     if (v.turn.card) v.turn.card.word = null;
     if (v.turn.parked) v.turn.parked.word = null;
   }
-  if (v.spade && v.spade.card && !(S.spade.descs || []).includes(pid)) v.spade.card.word = null;
   return v;
 }
 function broadcast() {
@@ -853,7 +839,7 @@ function normalizeHost() {
   S.players.forEach(p => { p.online = p.id === me; });
   const tr = S.turn;
   if (S.phase === 'play') { if (tr.mode === 'final') { S.phase = 'idle'; S.turn = null; } else { tr.paused = true; } }
-  if (S.phase === 'spade-play') { S.phase = 'spade-intro'; S.spade.card = null; }
+  if (S.phase === 'spade-play') S.phase = 'spade-intro';
   if (S.phase === 'moving') setTimeout(runAfter, 300);
 }
 
@@ -1033,7 +1019,7 @@ function effects(prev, v) {
   if (v.phase !== prev.phase) {
     if (v.phase === 'spade-intro') sfx.spade();
     if (v.phase === 'spin') sfx.spinner();
-    if (v.phase === 'play' || v.phase === 'spade-play') keepAwake();
+    if (v.phase === 'play') keepAwake();
     if (v.phase === 'win') { sfx.win(); confetti(); }
     if (v.phase === 'win' && v.turn && prev.phase === 'play') sfx.ok();
   }
@@ -1213,7 +1199,7 @@ const STAGE = {
     const isD = tr.describer === me, mine = teamOf(me, v), host = role === 'host';
     const dName = esc(nameOf(tr.describer, v));
     const top = `<div class="play-top">${timerHTML()}<div class="tally">${fin ? '<b>1</b><span>to win</span>' : `<b>${got}</b><span>correct</span>`}</div></div>`;
-    const band = (fin ? 'Final · ' : '') + CAT[tr.cat];
+    const band = (fin ? 'Final · ' : tr.mode === 'spade' ? '♠ Bonus · ' : '') + CAT[tr.cat];
     const fb = tr.card && tr.card.foulBy;
     if (isD) {
       return `<div class="stage-inner">${top}
@@ -1282,10 +1268,10 @@ const STAGE = {
       (host ? ' You\'re the host, so you decide every foul.' : ' The host decides every foul.');
     const line = fin
       ? (n ? 'Final card correct.' : 'The final card doesn\'t count.')
-      : `Move forward <b>${n}</b> ${n === 1 ? 'space' : 'spaces'}${n > 0 && to === v.len - 1 ? ' to the finish!' : n > 0 && land.spade ? ', onto a spade!' : n > 0 && land.spin ? ', onto a spinner!' : ''}`;
+      : `Move forward <b>${n}</b> ${n === 1 ? 'space' : 'spaces'}${n > 0 && to === v.len - 1 ? ' to the finish!' : tr.mode === 'spade' ? '' : n > 0 && land.spade ? ', onto a spade!' : n > 0 && land.spin ? ', onto a spinner!' : ''}`;
     const label = pending ? 'Waiting for the host to decide' : fin ? (n ? 'Confirm the win' : 'End turn') : n ? `Move ${esc(t.name)}` : 'End turn';
     return `<div class="stage-inner">
-      <p class="eyebrow">${esc(t.name)}</p>
+      <p class="eyebrow">${esc(t.name)}${tr.mode === 'spade' ? ' · ♠ bonus round' : ''}</p>
       <h2>${fin && n ? 'They got it!' : "Time's up!"}</h2>
       <p class="sub">${intro}</p>
       <ul class="review-list">${items}</ul>
@@ -1314,27 +1300,16 @@ const STAGE = {
     </div>`;
   },
   'spade-intro'(v) {
-    const sp = v.spade, by = v.teams[sp.by];
+    const sp = v.spade, by = v.teams[sp.by], mine = teamOf(me, v), ours = mine === sp.by, host = role === 'host';
     return `<div class="stage-inner">
       <div class="spade-big" aria-hidden="true">♠</div>
-      <p class="eyebrow">Spade round · everyone plays</p>
-      <h2>${esc(by.name)} landed on a spade!</h2>
-      <p class="sub">One describer from every team gets the same <b>${CAT[sp.cat]}</b> word on their phone. They all describe it to their own team at the same time. The first team to shout the answer moves forward 1 space.</p>
-      <ul class="describers">${v.teams.map((t, i) => { const w = describerOf(i, i === sp.by ? 1 : 0, v); return `<li><span class="dot" style="background:${t.color}"></span>${esc(t.name)}: ${w ? esc(nameOf(w, v)) + (w === me ? ' (you)' : '') : 'nobody'}</li>`; }).join('')}</ul>
-      <button class="btn btn-go btn-lg" data-act="spadeGo">Start the spade round</button>
-    </div>`;
-  },
-  'spade-play'(v) {
-    const sp = v.spade, amD = (sp.descs || []).includes(me), canJudge = amD || role === 'host';
-    const mine = teamOf(me, v), myD = mine != null ? sp.descs[mine] : null;
-    return `<div class="stage-inner">
-      <div class="play-top">${timerHTML()}<div class="tally"><b>♠</b><span>all play</span></div></div>
-      ${amD
-        ? cardHTML(sp.cat, esc(sp.card.word), 'Spade · ' + CAT[sp.cat], 'Describe it!', '')
-        : `<div class="guess cat-${sp.cat}"><b>Guess!</b><span>${myD ? esc(nameOf(myD, v)) + ' is describing for your team' : 'Listen to your team\'s describer'}</span></div>`}
-      <p class="sub">${sp.timeUp ? "Time's up. Did anyone get it?" : canJudge ? 'Tap the team that shouts it first.' : 'Shout the answer before the other teams do!'}</p>
-      ${canJudge ? `<div class="team-grid">${v.teams.map((t, i) => `<button class="btn team-btn" style="--team:${t.color}" data-act="spadeWin" data-i="${i}">${esc(t.name)} got it</button>`).join('')}</div>
-      <button class="btn btn-ghost" data-act="spadeWin" data-i="-1">Nobody got it</button>` : ''}
+      <p class="eyebrow">Spade · bonus round for ${esc(by.name)} only</p>
+      <h2>${ours ? 'You landed on a spade!' : esc(by.name) + ' landed on a spade!'}</h2>
+      <div class="cat-block cat-${sp.cat}"><span>Random category</span><b>${CAT[sp.cat]}</b><span>${HINT[sp.cat]}</span></div>
+      <p class="sub">${ours ? 'Your team gets another 30 seconds. Anyone on your team can start it: whoever taps Start describes.' : `${esc(by.name)} get another 30 seconds in this category. The usual rules apply, and you can call fouls.`}</p>
+      ${ours ? `<button class="btn btn-go btn-lg" data-act="spadeGo">Start, I'm describing</button>`
+        : host ? `<button class="btn btn-go btn-lg" data-act="spadeGo">Start for ${esc(by.name)}</button>`
+        : `<p class="sub">Waiting for someone on ${esc(by.name)} to start…</p>`}
     </div>`;
   },
   'final-choose'(v) {
@@ -1382,12 +1357,11 @@ function renderStage(v) {
   const focusAct = document.activeElement && st.contains(document.activeElement) ? document.activeElement.dataset.act : null;
   st.innerHTML = STAGE[ph](v);
   const card = st.querySelector('.card');
-  const cardKey = ph + ':' + (v.turn && v.turn.card ? v.turn.card.word : '') + ':' + (v.spade && v.spade.card ? v.spade.card.word : '');
+  const cardKey = ph + ':' + (v.turn && v.turn.card ? v.turn.card.word : '');
   if (card && cardKey !== lastCardKey) card.classList.add('deal');
   lastCardKey = cardKey;
-  if (ph === 'play' || ph === 'spade-play') {
-    const running = !v.turn.paused && !(ph === 'spade-play' && v.spade.timeUp);
-    syncCountdown(msLeft(v), running);
+  if (ph === 'play') {
+    syncCountdown(msLeft(v), !v.turn.paused);
   } else { clearInterval(cd.iv); cd.iv = 0; }
   if (ph === 'spin') driveWheel(v.spinner);
   if (focusAct) { const b = st.querySelector(`[data-act="${focusAct}"]`); if (b) b.focus(); }
@@ -1435,7 +1409,7 @@ function openRules() {
       <li><b>Only the host decides.</b> On a challenged card the host taps Foul (the card doesn't count) or Fair (it counts). The host can also rule any counted card a foul without a challenge.</li>
       <li>The final card can be challenged too, before the win counts.</li>
     </ul></section>
-    <section><h3>Spades ♠</h3><p>End your turn on a spade and everyone plays. One describer from each team gets the same word and they all describe at once. The first team to shout it moves forward 1 space.</p></section>
+    <section><h3>Spades ♠</h3><p>End your turn on a spade and your team gets a bonus round: another 30 seconds in a random category, for your team only. Anyone on your team can start it, and whoever taps Start describes. The usual rules apply (1 skip, fouls, challenges). Moving after a bonus round doesn't set off another spade or spinner.</p></section>
     <section><h3>Spinners</h3><p>End your turn on a spinner space (the red and green circle) and your team spins the wheel: +1, +2, −1 or −2. Then you choose any team to move by that amount: your own team, or a team you want to slow down. Moving because of the spinner doesn't set off another spade or spinner.</p></section>
     <section><h3>Winning</h3><p>Reaching the finish isn't enough. On your next turn, the other teams choose a category and you must get 1 card right in 30 seconds. Miss it and try again next turn. The first team to pass the final challenge wins.</p></section>
   </div>`;
