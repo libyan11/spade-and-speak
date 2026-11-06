@@ -318,7 +318,9 @@ const HINT = {
 };
 const TEAM_COLORS = ['#E5197D', '#0B93CF', '#5EA813', '#F2701C', '#6A3FD1', '#8A5A33'];
 const DEFAULT_NAMES = ['The Talkers', 'Word Nerds', 'Quick Lips', 'Clue Crew', 'Chatterboxes', 'Big Mouths'];
-const TURN_SECONDS = 30;
+/* turn length follows board size: short 20s, standard 25s, long 30s */
+function turnSecs(len) { return { 30: 20, 40: 25, 50: 30 }[len] || 30; }
+let turnTotal = 30;        // shown turn length, for the countdown ring
 const PEER_PREFIX = 'spade-speak-room-';
 const SPIN_VALUES = [1, -2, 2, -1, 1, -2, 2, -1];
 const SPIN_MS = 3200;
@@ -512,7 +514,7 @@ function draw(cat) {
   LS && setItem(LS, 'sps-seen', seen);
   return { cat, word, hard: HARD.has(word) };
 }
-function newTurn(mode, cat, describer) { return { mode, cat, describer, card: null, parked: null, skipUsed: false, records: [], left: TURN_SECONDS, paused: false }; }
+function newTurn(mode, cat, describer) { const total = turnSecs(S.len); return { mode, cat, describer, card: null, parked: null, skipUsed: false, records: [], left: total, total, paused: false, note: null }; }
 function membersOf(ti, v = S) { return v.players.filter(p => p.team === ti); }
 function teamOf(pid, v = S) { const p = v.players.find(x => x.id === pid); return p ? p.team : null; }
 function nameOf(pid, v = S) { const p = v.players.find(x => x.id === pid); return p ? p.name : 'Someone'; }
@@ -573,6 +575,10 @@ function onTimeUp() {
 function endTurnAdvance() {
   S.teams[S.cur].desc++;
   S.cur = (S.cur + 1) % S.teams.length;
+  /* pass over teams with nobody online */
+  const gone = [];
+  for (let k = 1; k < S.teams.length && !membersOf(S.cur).some(x => x.online); k++) { gone.push(S.teams[S.cur].name); S.cur = (S.cur + 1) % S.teams.length; }
+  if (gone.length) S.last = (S.last ? S.last + ' ' : '') + `Skipped ${gone.join(' and ')}: nobody online.`;
   Object.assign(S, { phase: 'idle', turn: null, spinner: null, after: null, finalCat: null });
   broadcast();
 }
@@ -617,6 +623,7 @@ function handleAct(pid, act, d) {
     start() { if (host && ph === 'lobby' && teamsReady().ok) startGame(); },
     startTurn() {
       if (ph !== 'idle' || (p.team !== S.cur && !host)) return;
+      if (p.team !== S.cur && !membersOf(S.cur).some(x => x.online)) return;
       const t = S.teams[S.cur], atFinish = t.pos === S.len - 1;
       if (atFinish && !S.finalCat) { S.phase = 'final-choose'; return; }
       const cat = atFinish ? S.finalCat : S.spaces[t.pos].cat;
@@ -624,6 +631,11 @@ function handleAct(pid, act, d) {
       S.turn.card = draw(cat);
       S.phase = 'play';
       hostStartTimer(onTimeUp);
+    },
+    skipTeam() {
+      if (!host || ph !== 'idle' || membersOf(S.cur).some(x => x.online)) return;
+      S.last = `Skipped ${S.teams[S.cur].name}: nobody online.`;
+      endTurnAdvance();
     },
     finalCat() {
       if (ph !== 'final-choose' || !CAT[d.cat]) return;
@@ -687,7 +699,7 @@ function handleAct(pid, act, d) {
     },
     pause() {
       if (ph !== 'play' || !isD) return;
-      if (tr.paused) { tr.paused = false; hostStartTimer(); }
+      if (tr.paused) { tr.paused = false; tr.note = null; hostStartTimer(); }
       else { tr.left = remaining() / 1000; hostStopTimer(); tr.paused = true; }
     },
     toggle() {
@@ -721,7 +733,8 @@ function handleAct(pid, act, d) {
 /* what each player may see */
 function canSeeWord(pid) {
   if (!S.turn) return false;
-  return S.turn.describer === pid || teamOf(pid) !== S.cur;
+  const t = teamOf(pid);
+  return S.turn.describer === pid || (t != null && t !== S.cur);
 }
 function publicState(pid) {
   const v = JSON.parse(JSON.stringify(S));
@@ -836,6 +849,10 @@ function hostReceive(c, m) {
     const name = String(m.name || '').trim().slice(0, 20) || 'Player';
     c.pid = pid; conns.add(c);
     let p = S.players.find(x => x.id === pid);
+    if (!p) {
+      p = S.players.find(x => !x.online && x.id !== S.hostId && x.name.toLowerCase() === name.toLowerCase());
+      if (p) { if (S.turn && S.turn.describer === p.id) S.turn.describer = pid; p.id = pid; }
+    }
     if (!p) S.players.push({ id: pid, name, team: null, online: true });
     else { p.name = name; p.online = true; }
     broadcast(); return;
@@ -848,8 +865,18 @@ function hostDrop(c) {
   if (c.pid && ![...conns].some(x => x.pid === c.pid)) {
     const p = S.players.find(x => x.id === c.pid);
     if (p) p.online = false;
+    if (p && S.phase === 'play' && S.turn && S.turn.describer === p.id) setTimeout(() => describerGone(p.id), 5000);
     broadcast();
   }
+}
+function describerGone(id) {
+  const tr = S.turn, p = S.players.find(x => x.id === id);
+  if (S.phase !== 'play' || !tr || tr.describer !== id || !p || p.online) return;
+  if (!tr.paused) { tr.left = remaining() / 1000; hostStopTimer(); tr.paused = true; }
+  const mate = membersOf(S.cur).find(x => x.online && x.id !== id);
+  if (mate) { tr.describer = mate.id; tr.note = `${p.name} dropped out, so ${mate.name} is describing now. ${mate.name}, tap Resume.`; }
+  else tr.note = `${p.name} dropped out. The turn is paused until they come back.`;
+  broadcast();
 }
 function normalizeHost() {
   S.players.forEach(p => { p.online = p.id === me; });
@@ -990,13 +1017,13 @@ function syncCountdown(ms, running) {
 function paintTimer(left) {
   const box = $('#timer'); if (!box) return;
   const C = 2 * Math.PI * 42;
-  box.querySelector('.prog').style.strokeDashoffset = f1(C * (1 - left / TURN_SECONDS));
+  box.querySelector('.prog').style.strokeDashoffset = f1(C * (1 - left / turnTotal));
   box.querySelector('span').textContent = Math.ceil(left);
   box.classList.toggle('low', left <= 5 && left > 0);
 }
 function timerHTML() {
   const C = 2 * Math.PI * 42;
-  return `<div class="timer" id="timer" role="timer" aria-label="Seconds left"><svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="42"/><circle class="prog" cx="50" cy="50" r="42" stroke-dasharray="${f1(C)}" stroke-dashoffset="0"/></svg><span>30</span></div>`;
+  return `<div class="timer" id="timer" role="timer" aria-label="Seconds left"><svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="42"/><circle class="prog" cx="50" cy="50" r="42" stroke-dasharray="${f1(C)}" stroke-dashoffset="0"/></svg><span>${turnTotal}</span></div>`;
 }
 
 /* ---------- rendering ---------- */
@@ -1053,7 +1080,7 @@ function renderHome() {
   $('#home').innerHTML = `
   <div class="home">
     <div class="home-left">
-      <p class="eyebrow">Online · classic rules · 30-second turns</p>
+      <p class="eyebrow">Online · classic rules · 20 to 30 second turns</p>
       <h1>Describe it fast. Race round the ring.</h1>
       <p class="lede">Play on your own phones from anywhere. One person creates a game and shares the room code. Everyone else joins with it and picks a team. No accounts needed.</p>
       <div class="board-wrap" style="max-width:340px;margin:0">${boardSVG(buildSpaces(40), false)}</div>
@@ -1103,7 +1130,7 @@ function renderLobby(v) {
     </div>
     ${host ? `<div class="settings">
       <div class="field"><span class="label" id="tcLabel">Teams</span><div class="seg-group" role="group" aria-labelledby="tcLabel">${[2, 3, 4, 5, 6].map(n => `<button data-act="setCount" data-n="${n}" aria-pressed="${n === v.teamCount}">${n}</button>`).join('')}</div></div>
-      <div class="field"><span class="label" id="lnLabel">Board size</span><div class="seg-group" role="group" aria-labelledby="lnLabel">${[[30, 'Short · 30'], [40, 'Standard · 40'], [50, 'Long · 50']].map(([n, l]) => `<button data-act="setLen" data-n="${n}" aria-pressed="${n === v.len}">${l}</button>`).join('')}</div></div>
+      <div class="field"><span class="label" id="lnLabel">Board size</span><div class="seg-group" role="group" aria-labelledby="lnLabel">${[[30, 'Short · 30 · 20s'], [40, 'Standard · 40 · 25s'], [50, 'Long · 50 · 30s']].map(([n, l]) => `<button data-act="setLen" data-n="${n}" aria-pressed="${n === v.len}">${l}</button>`).join('')}</div></div>
     </div>` : `<p class="muted">${v.teamCount} teams · ${v.len}-space board. The host can change these.</p>`}
     <div class="team-cols">${Array.from({ length: v.teamCount }, (_, i) => {
       const m = membersOf(i, v);
@@ -1136,14 +1163,16 @@ function renderPanel(v) {
     ${atFinish ? '<span class="pill" style="background:var(--finish);color:var(--plate)">Final challenge</span>' : `<span class="pill cat-${cat}">${CAT[cat]}</span>`}
     <div class="bc-sub">${t.pos === 0 ? 'On the start' : atFinish ? 'At the finish' : `Space ${t.pos} · ${v.len - 1 - t.pos} to go`}</div>`;
   let action = '';
+  const anyOn = membersOf(v.cur, v).some(p => p.online);
   if (moving) action = `<button class="btn btn-primary btn-lg" disabled>Moving…</button>`;
+  else if (!anyOn) action = `<p class="muted">Nobody from ${esc(t.name)} is online right now.</p>` + (host ? `<button class="btn btn-primary btn-lg" data-act="skipTeam">Skip their turn</button>` : '');
   else if (myTurn || host) {
     const label = atFinish && !v.finalCat ? 'Start final challenge' : sugg === me ? "Start turn, I'm describing" : myTurn ? `Describe instead of ${nameOf(sugg, v)}` : `Start for ${t.name}`;
     action = `<button class="btn btn-primary btn-lg" data-act="startTurn">${esc(label)}</button>`;
     if (myTurn && sugg !== me && !(atFinish && !v.finalCat)) action = `<p class="muted">${esc(nameOf(sugg, v))} should press Start on their phone.</p>` + action.replace('btn-primary btn-lg', 'btn btn-small');
   } else action = `<p class="muted">Waiting for ${esc(t.name)} to start their turn.</p>`;
   const catBlock = atFinish
-    ? `<div class="final-block"><b>Final challenge${v.finalCat ? ': ' + CAT[v.finalCat] : ''}</b>${v.finalCat ? 'Get 1 card right in 30 seconds to win.' : 'The other teams pick a category. Get 1 card right in 30 seconds to win.'}</div>`
+    ? `<div class="final-block"><b>Final challenge${v.finalCat ? ': ' + CAT[v.finalCat] : ''}</b>${v.finalCat ? `Get 1 card right in ${turnSecs(v.len)} seconds to win.` : `The other teams pick a category. Get 1 card right in ${turnSecs(v.len)} seconds to win.`}</div>`
     : `<div class="cat-block cat-${cat}"><span>Category for this turn</span><b>${CAT[cat]}</b><span>${HINT[cat]}</span></div>`;
   const pick = mine == null ? `<div class="box"><h3>Join a team</h3><div class="row">${v.teams.map((tt, i) => `<button class="btn btn-small" data-act="team" data-team="${i}"><span class="dot" style="background:${tt.color};display:inline-block;vertical-align:-2px;margin-right:6px"></span>${esc(tt.name)}</button>`).join('')}</div></div>` : '';
   $('#panel').innerHTML = `
@@ -1219,8 +1248,9 @@ const STAGE = {
     const cc = tr.card && tr.card.cat || tr.cat;
     const band = (fin ? 'Final · ' : tr.cat === 'any' ? '♠ Any · ' : '') + CAT[cc] + (tr.card && tr.card.hard ? ' · ★ Hard' : '');
     const fb = tr.card && tr.card.foulBy;
+    const note = tr.note ? `<div class="foul-banner">${esc(tr.note)}</div>` : '';
     if (isD) {
-      return `<div class="stage-inner">${top}
+      return `<div class="stage-inner">${top}${note}
         ${cardHTML(cc, tr.paused ? 'Paused' : esc(tr.card.word), band, esc(t.name), tr.paused ? 'paused' : '')}
         ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))} called foul</b> on this card. If you did say the word or part of it, tap "Said the word". If you didn't, keep going: the host decides after the turn.</div>` : ''}
         <div class="parked">${tr.parked
@@ -1238,14 +1268,18 @@ const STAGE = {
       </div>`;
     }
     if (mine === v.cur) {
-      return `<div class="stage-inner">${top}
+      return `<div class="stage-inner">${top}${note}
         <div class="guess cat-${tr.cat}"><b>${tr.paused ? 'Paused' : 'Guess!'}</b><span>${dName} is describing ${tr.cat === 'any' ? 'words from any category' : `${fin ? 'the final' : tr.cat === 'object' || tr.cat === 'action' ? 'an' : 'a'} ${CAT[tr.cat]} word`}</span></div>
         <p class="sub">Shout your answers out loud${fin ? '. One right answer wins the game!' : '. Every right answer moves your team one space.'}</p>
         ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))}</b> called foul on this card. The host decides after the turn.</div>` : ''}
         ${host ? `<div class="row"><button class="link" data-act="pause">${tr.paused ? 'Resume' : 'Pause'}</button></div>` : ''}
       </div>`;
     }
-    return `<div class="stage-inner">${top}
+    if (mine == null) return `<div class="stage-inner">${top}${note}
+      <div class="guess cat-${tr.cat}"><b>Watching</b><span>${esc(t.name)} are playing · ${dName} describes</span></div>
+      <p class="sub">You're not on a team, so you can't see the word. Pick a team when this turn ends.</p>
+    </div>`;
+    return `<div class="stage-inner">${top}${note}
       <p class="eyebrow">${esc(t.name)} is playing · ${dName} describes</p>
       ${cardHTML(cc, tr.paused ? 'Paused' : esc(tr.card.word), band, 'You can see it', tr.paused ? 'paused' : '')}
       <div class="note">You're on another team, so you can see the word. <b>Keep quiet</b> and listen. If ${dName} says the word or part of it, call a foul. You can also challenge any card after the turn.</div>
@@ -1322,7 +1356,7 @@ const STAGE = {
     return `<div class="stage-inner">
       <p class="eyebrow">Final challenge</p>
       <h2>${esc(t.name)} reached the finish</h2>
-      <p class="sub">To win, they need 1 right answer in 30 seconds. ${canPick ? '<b>Your team</b> helps choose the category. Pick the one you think is hardest for them. The first tap counts.' : 'The other teams are choosing your category…'}</p>
+      <p class="sub">To win, they need 1 right answer in ${turnSecs(v.len)} seconds. ${canPick ? '<b>Your team</b> helps choose the category. Pick the one you think is hardest for them. The first tap counts.' : 'The other teams are choosing your category…'}</p>
       ${canPick ? `<div class="cat-grid">${ORDER.map(c => `<button class="btn cat-btn cat-${c}" data-act="finalCat" data-cat="${c}"><b>${CAT[c]}</b><span>${HINT[c]}</span></button>`).join('')}</div>` : ''}
     </div>`;
   },
@@ -1360,6 +1394,7 @@ function renderStage(v) {
   }
   st.hidden = false; document.body.classList.add('locked');
   const focusAct = document.activeElement && st.contains(document.activeElement) ? document.activeElement.dataset.act : null;
+  if (v.turn) turnTotal = v.turn.total || turnSecs(v.len);
   st.innerHTML = STAGE[ph](v);
   const card = st.querySelector('.card');
   const cardKey = ph + ':' + (v.turn && v.turn.card ? v.turn.card.word : '');
@@ -1397,7 +1432,7 @@ function openRules() {
     </ol></section>
     <section><h3>Turns</h3><ol>
       <li>Teams take turns. Each turn one player describes; the describer rotates every turn.</li>
-      <li>The describer sees the word on their phone and has 30 seconds to describe as many words as they can from the category of the space their team is on.</li>
+      <li>The describer sees the word on their phone and has 20, 25 or 30 seconds (short, standard or long board) to describe as many words as they can from the category of the space their team is on.</li>
       <li>Their teammates see "Guess!" and shout answers. The other teams see the word too, so they can check for rule breaks.</li>
       <li>When time's up, your team moves forward one space for every right answer.</li>
     </ol></section>
@@ -1416,7 +1451,7 @@ function openRules() {
     </ul></section>
     <section><h3>Spades ♠</h3><p>A spade space has no single category. When your turn starts on one, every card can come from any category. It's a normal turn, not an extra go.</p></section>
     <section><h3>Spinners</h3><p>End your turn on a spinner space (the red and green circle) and your team spins the wheel: +1, +2, −1 or −2. Then you choose any team to move by that amount: your own team, or a team you want to slow down. Moving because of the spinner doesn't set off another spade or spinner.</p></section>
-    <section><h3>Winning</h3><p>Reaching the finish isn't enough. On your next turn, the other teams choose a category and you must get 1 card right in 30 seconds. Miss it and try again next turn. The first team to pass the final challenge wins.</p></section>
+    <section><h3>Winning</h3><p>Reaching the finish isn't enough. On your next turn, the other teams choose a category and you must get 1 card right before the time runs out. Miss it and try again next turn. The first team to pass the final challenge wins.</p></section>
   </div>`;
   $('#rules').hidden = false;
   $('#rules [data-act="closeRules"]').focus();
