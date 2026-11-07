@@ -631,6 +631,13 @@ function runAfter() {
     S.phase = 'spin'; S.after = null; broadcast();
   } else endTurnAdvance();
 }
+/* only the team that landed on the spinner spins and picks; the host steps in only if nobody from that team is online */
+function spinnerMine(p, v = S) {
+  const by = v.spinner && v.spinner.by;
+  if (by == null || !p) return false;
+  if (p.team === by) return true;
+  return p.id === v.hostId && !membersOf(by, v).some(x => x.online);
+}
 function moveTeam(ti, n) {
   const t = S.teams[ti], from = t.pos, to = Math.max(0, Math.min(S.len - 1, from + n));
   t.pos = to;
@@ -713,13 +720,13 @@ function handleAct(pid, act, d) {
     },
     spin() {
       const sp = S.spinner;
-      if (ph !== 'spin' || sp.result != null || !(p.team === sp.by || host)) return;
+      if (ph !== 'spin' || sp.result != null || !spinnerMine(p)) return;
       const k = Math.floor(Math.random() * SPIN_VALUES.length);
       Object.assign(sp, { result: SPIN_VALUES[k], slice: k, id: Date.now() + '-' + k, at: Date.now() });
     },
     spinPick() {
       const sp = S.spinner, ti = +d.i;
-      if (ph !== 'spin' || sp.result == null || Date.now() - sp.at < SPIN_MS - 600 || !(p.team === sp.by || host) || !S.teams[ti]) return;
+      if (ph !== 'spin' || sp.result == null || Date.now() - sp.at < SPIN_MS - 600 || !spinnerMine(p) || !S.teams[ti]) return;
       const by = S.teams[sp.by], n = Math.abs(sp.result), { from, to } = moveTeam(ti, sp.result);
       const whom = ti === sp.by ? 'themselves' : S.teams[ti].name;
       S.after = 'next';
@@ -1377,7 +1384,7 @@ const STAGE = {
   },
   spin(v) {
     const sp = v.spinner, by = v.teams[sp.by], mine = teamOf(me, v);
-    const can = mine === sp.by || role === 'host';
+    const can = spinnerMine(v.players.find(p => p.id === me), v);
     const spun = sp.result != null, done = spun && wheelDone(sp), n = spun ? Math.abs(sp.result) : 0, fwd = spun && sp.result > 0;
     const sub = !spun ? `Spin for +1, +2, −1 or −2. Then ${mine === sp.by ? 'your team picks' : esc(by.name) + ' picks'} any team to move: their own or another team.`
       : !done ? 'Spinning…'
