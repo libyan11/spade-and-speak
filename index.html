@@ -739,8 +739,8 @@ function handleAct(pid, act, d) {
     },
     useParked() {
       if (ph !== 'play' || !isD || tr.paused || !tr.parked) return;
-      tr.records.push({ word: tr.card.word, res: 'skipped', ok: false });
-      tr.card = tr.parked; tr.parked = null;
+      /* swap: the card you were on waits on the side instead, so nothing is lost */
+      [tr.card, tr.parked] = [tr.parked, tr.card];
     },
     foul() {
       if (ph !== 'play' || !isD || tr.paused) return;
@@ -1305,10 +1305,12 @@ const STAGE = {
         ${cardHTML(cc, tr.paused ? 'Paused' : esc(tr.card.word), band, esc(t.name), tr.paused ? 'paused' : '')}
         ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))} called foul</b> on this card. If you did say the word or part of it, tap "Said the word". If you didn't, keep going: the host decides after the turn.</div>` : ''}
         <div class="parked">${tr.parked
-          ? `<span>Skipped: <b>${tr.paused ? '•••' : esc(tr.parked.word)}</b></span><button class="btn btn-small" data-act="useParked" ${tr.paused ? 'disabled' : ''}>Switch back to it</button>`
+          ? `<span>Skipped: <b>${tr.paused ? '•••' : esc(tr.parked.word)}</b></span><span class="small-hint">Go back any time. This card waits here instead.</span>`
           : `<span class="small-hint">${tr.skipUsed ? 'Skip used this turn.' : 'You have 1 skip this turn.'}</span>`}</div>
         <div class="play-actions">
-          <button class="btn btn-skip" data-act="skip" ${tr.skipUsed || tr.paused ? 'disabled' : ''}>${tr.skipUsed ? 'Skip used' : 'Skip'}</button>
+          ${tr.parked
+          ? `<button class="btn btn-skip" data-act="useParked" ${tr.paused ? 'disabled' : ''}>↩ Back to skipped</button>`
+          : `<button class="btn btn-skip" data-act="skip" ${tr.skipUsed || tr.paused ? 'disabled' : ''}>${tr.skipUsed ? 'Skip used' : 'Skip'}</button>`}
           <button class="btn btn-go" data-act="got" ${tr.paused ? 'disabled' : ''}>Got it ✓</button>
         </div>
         <div class="play-foot">
@@ -1492,7 +1494,7 @@ function openRules() {
       <li>Give the first letter or spell it out, or use another language.</li>
       <li>Act, mime or point. Words only.</li>
     </ul></section>
-    <section><h3>Skips</h3><p>You get <b>1 skip per turn</b>. The skipped card waits on the side. If the next card is harder, you can switch back to the skipped one. The card you switch away from is out.</p></section>
+    <section><h3>Skips</h3><p>You get <b>1 skip per turn</b>. The skipped card waits on the side, and you can go back to it any time in that turn, even after getting other cards right. Tap <b>↩ Back to skipped</b> and the card you were on waits on the side instead, so you never lose it. Whatever card is still on the side when time runs out doesn't count.</p></section>
     <section><h3>Fouls and challenges 🚩</h3><ul>
       <li>The other teams can see the word. If the describer says it or part of it, tap <b>Call foul</b> during the turn. The describer sees the flag and can drop the card.</li>
       <li>After the turn, the other teams can also tap <b>Challenge</b> on any card that was counted.</li>
