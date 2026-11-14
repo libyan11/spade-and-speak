@@ -273,6 +273,35 @@ button.rv { cursor: pointer; }
 .modal-panel ul, .modal-panel ol { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; max-width: 62ch; }
 .modal-panel section { display: flex; flex-direction: column; gap: 4px; }
 
+/* voice call bar: floats above the board and the turn stage */
+.call {
+  position: fixed; z-index: 70; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 24px);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px;
+  box-shadow: 0 8px 28px var(--shadow), inset 0 0 0 1.5px var(--line);
+}
+.call .btn { border-radius: 999px; padding: .5em 1em; font-size: .92rem; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.call .btn svg { width: 18px; height: 18px; flex: none; }
+.call .btn-icon { padding: .5em .7em; }
+.call .btn-icon.on { background: var(--bad); color: #fff; box-shadow: none; }
+.btn-call { background: var(--good); color: #fff; box-shadow: 0 3px 0 var(--good-deep); }
+.btn-hang { background: var(--bad); color: #fff; box-shadow: 0 3px 0 #9E1F26; padding: .5em .8em; }
+.btn-hang svg { transform: rotate(135deg); }
+.call .who { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 4px 4px; scrollbar-width: none; min-width: 0; }
+.vc-av {
+  width: 34px; height: 34px; border-radius: 50%; flex: none; position: relative; display: grid; place-items: center;
+  font-weight: 800; font-size: .8rem; color: #fff; background: var(--team, var(--muted)); transition: box-shadow .12s, opacity .2s;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.vc-av.talk { box-shadow: 0 0 0 2px var(--surface), 0 0 0 5px var(--good); }
+.vc-av.wait { opacity: .4; }
+.vc-av .m { position: absolute; right: -4px; bottom: -4px; width: 17px; height: 17px; border-radius: 50%; background: var(--bad); display: grid; place-items: center; box-shadow: 0 0 0 2px var(--surface); }
+.vc-av .m svg { width: 11px; height: 11px; }
+.call-note { font-size: .82rem; font-weight: 700; color: var(--muted); padding: 0 6px; white-space: nowrap; }
+.call-note.err { color: var(--bad); white-space: normal; max-width: 260px; line-height: 1.25; }
+body.has-call #app { padding-bottom: 104px; }
+body.has-call #stage { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); }
+
 @media (max-width: 880px) {
   .home, .game { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .board-wrap { max-width: 480px; }
@@ -313,6 +342,8 @@ button.rv { cursor: pointer; }
 </div>
 <div id="stage" hidden></div>
 <div id="rules" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="rulesTitle"></div>
+<div id="call" class="call" hidden role="region" aria-label="Voice call"></div>
+<div id="vcAudio" hidden></div>
 
 <script>
 const ORDER = ['object', 'action', 'world', 'person', 'random', 'nature'];
@@ -815,6 +846,9 @@ function handleAct(pid, act, d) {
       S.teams.forEach(t => { t.pos = 0; t.desc = 0; });
       Object.assign(S, { phase: 'idle', cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null, log: [] });
     },
+    voice() {
+      p.call = d.on && typeof d.vid === 'string' && d.vid ? { vid: d.vid.slice(0, 64), mute: !!d.mute } : null;
+    },
     toLobby() {
       if (!host) return;
       hostStopTimer();
@@ -958,7 +992,7 @@ function hostDrop(c) {
   conns.delete(c);
   if (c.pid && ![...conns].some(x => x.pid === c.pid)) {
     const p = S.players.find(x => x.id === c.pid);
-    if (p) p.online = false;
+    if (p) { p.online = false; p.call = null; }
     if (p && S.phase === 'play' && S.turn && S.turn.describer === p.id) setTimeout(() => describerGone(p.id), 5000);
     broadcast();
   }
@@ -973,7 +1007,7 @@ function describerGone(id) {
   broadcast();
 }
 function normalizeHost() {
-  S.players.forEach(p => { p.online = p.id === me; });
+  S.players.forEach(p => { p.online = p.id === me; p.call = null; });
   const tr = S.turn;
   if (S.phase === 'play') { if (tr.mode === 'final') { S.phase = 'idle'; S.turn = null; } else { tr.paused = true; } }
   /* games saved before spades changed: drop the old spade round and rebuild the board */
@@ -1016,6 +1050,7 @@ function linked(how) {
   everConnected = true; link = how; clearTimeout(giveUpTimer);
   setNet('In room ' + roomCode + (how === 'relay' ? ' · backup link' : ''), 'ok');
   LS && setItem(LS, 'sps-guest', { code: roomCode });
+  if (vc.on) setTimeout(vcAnnounce, 300);
 }
 /* say hello through the relays until the host answers there (or the direct link opens) */
 function useRelay() {
@@ -1080,6 +1115,7 @@ function msLeft(v) {
   return Math.max(0, lastRemaining - (performance.now() - lastRecv));
 }
 function leave(msg) {
+  vcStop(true);
   clearTimeout(retryTimer); hostStopTimer();
   clearTimeout(fallbackTimer); clearTimeout(giveUpTimer); clearInterval(helloIv); clearInterval(beatIv); helloIv = 0;
   try { peer && peer.destroy(); } catch (e) {}
@@ -1091,6 +1127,170 @@ function leave(msg) {
   homeMsg = msg || ''; homeErr = !!msg;
   setNet('');
   render();
+}
+
+/* ================= VOICE CALL =================
+   Anyone in the room can join a voice call. Every pair of phones in the call is linked directly (WebRTC via
+   PeerJS, which falls back to its TURN servers when a direct path is blocked). Who is in the call, their call
+   id and mute state travel in the game state, so this works whichever way the game itself is connected.
+   For each pair, the phone whose call id sorts lower places the call; the other answers. */
+const vc = { on: false, joining: false, mute: false, stream: null, peer: null, vid: '', calls: new Map(), retry: new Map(), meters: new Map(), note: '', needTap: false, iv: 0, miv: 0, lastAnn: 0 };
+const ICON = {
+  phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>',
+  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+  micOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"/></svg>'
+};
+function vcMembers(v) {
+  v = v || view();
+  return v ? v.players.filter(p => p.online && p.call && p.call.vid) : [];
+}
+function vcAnnounce() {
+  if (!role) return;
+  vc.lastAnn = Date.now();
+  doAct('voice', vc.on && vc.vid ? { on: true, vid: vc.vid, mute: vc.mute } : { on: false });
+}
+function vcNote(t) { vc.note = t; renderCall(); }
+
+async function vcJoin() {
+  if (vc.on || vc.joining || !role) return;
+  vc.note = '';
+  if (typeof Peer === 'undefined') { vcNote("Calls couldn't load. Check your internet and reload."); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { vcNote("This browser can't use the microphone here."); return; }
+  vc.joining = true; renderCall();
+  try {
+    vc.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+  } catch (e) {
+    vc.joining = false;
+    vcNote(e && e.name === 'NotAllowedError' ? 'Microphone blocked. Allow it for this site in your browser settings, then try again.' : "Couldn't open the microphone.");
+    return;
+  }
+  if (!role) { vcStop(true); return; }
+  vc.mute = false;
+  const pr = new Peer({ debug: 1 });
+  vc.peer = pr;
+  pr.on('open', id => {
+    if (vc.peer !== pr) return;
+    vc.vid = id; vc.on = true; vc.joining = false;
+    vcMeter('me', vc.stream);
+    clearInterval(vc.iv); vc.iv = setInterval(vcSync, 2500);
+    clearInterval(vc.miv); vc.miv = setInterval(vcMeterTick, 120);
+    vcAnnounce(); vcSync();
+  });
+  pr.on('call', mc => {
+    if (vc.peer !== pr || !vc.on || !vc.stream) { try { mc.close(); } catch (e) {} return; }
+    if (vc.calls.has(mc.peer)) vcDrop(mc.peer, true);
+    mc.answer(vc.stream);
+    vcWatch(mc);
+    renderCall();
+  });
+  pr.on('disconnected', () => setTimeout(() => { try { if (vc.peer === pr && !pr.destroyed) pr.reconnect(); } catch (e) {} }, 1500));
+  pr.on('error', e => {
+    if (vc.peer !== pr || e.type === 'peer-unavailable') return; /* someone left; vcSync tidies up */
+    if (!vc.on) { vcStop(true); vcNote("Couldn't start the call (" + e.type + '). Try again.'); }
+  });
+}
+function vcWatch(mc) {
+  const rec = { mc, at: Date.now(), stream: null, el: null };
+  vc.calls.set(mc.peer, rec);
+  mc.on('stream', st => {
+    if (vc.calls.get(mc.peer) !== rec || rec.stream === st) return;
+    rec.stream = st;
+    if (!rec.el) { rec.el = document.createElement('audio'); rec.el.autoplay = true; rec.el.setAttribute('playsinline', ''); $('#vcAudio').appendChild(rec.el); }
+    rec.el.srcObject = st;
+    rec.el.play().catch(() => { vc.needTap = true; renderCall(); });
+    vcUnmeter(mc.peer); vcMeter(mc.peer, st);
+    renderCall();
+  });
+  const gone = () => { if (vc.calls.get(mc.peer) === rec) vcDrop(mc.peer); };
+  mc.on('close', gone); mc.on('error', gone);
+}
+function vcDrop(vid, quiet) {
+  const rec = vc.calls.get(vid); if (!rec) return;
+  vc.calls.delete(vid);
+  try { rec.mc.close(); } catch (e) {}
+  if (rec.el) { rec.el.srcObject = null; rec.el.remove(); }
+  vcUnmeter(vid);
+  vc.retry.set(vid, Date.now());
+  if (!quiet) renderCall();
+}
+function vcSync() {
+  if (!vc.on || !vc.peer || vc.peer.destroyed) { renderCall(); return; }
+  const v = view();
+  const mine = v && v.players.find(p => p.id === me);
+  /* make sure the host has our current call details (a message can be lost while reconnecting) */
+  if (mine && (!mine.call || mine.call.vid !== vc.vid || mine.call.mute !== vc.mute) && Date.now() - vc.lastAnn > 3000) vcAnnounce();
+  const want = new Set(vcMembers(v).filter(p => p.id !== me && p.call.vid !== vc.vid).map(p => p.call.vid));
+  const now = Date.now();
+  [...vc.calls.keys()].forEach(vid => {
+    const rec = vc.calls.get(vid), st = rec.mc.peerConnection && rec.mc.peerConnection.iceConnectionState;
+    if (!want.has(vid) || (!rec.stream && now - rec.at > 15000) || st === 'failed' || st === 'closed') vcDrop(vid, true);
+  });
+  if (!vc.peer.disconnected) {
+    want.forEach(vid => {
+      if (vc.calls.has(vid) || vc.vid > vid || now - (vc.retry.get(vid) || 0) < 4000) return;
+      let mc = null; try { mc = vc.peer.call(vid, vc.stream); } catch (e) {}
+      if (mc) vcWatch(mc);
+    });
+  }
+  renderCall();
+}
+function vcStop(silent) {
+  const was = vc.on;
+  clearInterval(vc.iv); clearInterval(vc.miv);
+  [...vc.calls.keys()].forEach(vid => vcDrop(vid, true));
+  [...vc.meters.keys()].forEach(vcUnmeter);
+  if (vc.stream) vc.stream.getTracks().forEach(t => t.stop());
+  try { vc.peer && vc.peer.destroy(); } catch (e) {}
+  Object.assign(vc, { on: false, joining: false, mute: false, stream: null, peer: null, vid: '', needTap: false, iv: 0, miv: 0 });
+  vc.retry.clear();
+  if (was && !silent) vcAnnounce();
+}
+
+/* speaking rings: a level meter on each voice */
+function vcMeter(key, stream) {
+  ensureAudio(); if (!ac) return;
+  try {
+    const src = ac.createMediaStreamSource(stream), an = ac.createAnalyser();
+    an.fftSize = 512; src.connect(an);
+    vc.meters.set(key, { src, an, buf: new Uint8Array(an.fftSize) });
+  } catch (e) {}
+}
+function vcUnmeter(key) { const m = vc.meters.get(key); if (m) { try { m.src.disconnect(); } catch (e) {} vc.meters.delete(key); } }
+function vcMeterTick() {
+  vc.meters.forEach((m, key) => {
+    m.an.getByteTimeDomainData(m.buf);
+    let s = 0; for (let i = 0; i < m.buf.length; i++) { const x = (m.buf[i] - 128) / 128; s += x * x; }
+    const talk = Math.sqrt(s / m.buf.length) > .035 && !(key === 'me' && vc.mute);
+    document.querySelectorAll(`#call [data-vk="${key}"]`).forEach(el => el.classList.toggle('talk', talk));
+  });
+}
+
+function initials(n) { return String(n || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?'; }
+function renderCall() {
+  const box = $('#call'), v = view();
+  const show = !!(role && v);
+  box.hidden = !show; document.body.classList.toggle('has-call', show);
+  if (!show) return;
+  const av = (p, key, wait, mute) => {
+    const col = p.team != null ? TEAM_COLORS[p.team % TEAM_COLORS.length] : '';
+    const label = (p.id === me ? 'You' : p.name) + (mute ? ', muted' : '') + (wait ? ', connecting' : '');
+    return `<span class="vc-av${wait ? ' wait' : ''}" data-vk="${esc(key)}" title="${esc(label)}" aria-label="${esc(label)}" role="img"${col ? ` style="--team:${col}"` : ''}>${esc(initials(p.name))}${mute ? `<i class="m">${ICON.micOff}</i>` : ''}</span>`;
+  };
+  const members = vcMembers(v);
+  if (!vc.on) {
+    const n = members.length;
+    box.innerHTML = `<button class="btn btn-call" data-act="callJoin"${vc.joining ? ' disabled' : ''}>${ICON.phone}${vc.joining ? 'Joining…' : n ? 'Join call' : 'Start a call'}</button>`
+      + (n ? `<span class="who">${members.slice(0, 5).map(p => av(p, p.call.vid, false, p.call.mute)).join('')}</span><span class="call-note">${n} in call</span>` : '')
+      + (vc.note ? `<span class="call-note err" role="status">${esc(vc.note)}</span>` : '');
+    return;
+  }
+  const meP = v.players.find(p => p.id === me) || { id: me, name: myName, team: null };
+  const others = members.filter(p => p.id !== me && p.call.vid !== vc.vid);
+  box.innerHTML = `<span class="who">${av(meP, 'me', false, vc.mute)}${others.map(p => { const r = vc.calls.get(p.call.vid); return av(p, p.call.vid, !(r && r.stream), p.call.mute); }).join('')}</span>`
+    + (others.length ? '' : '<span class="call-note">Waiting for others…</span>')
+    + (vc.needTap ? '<button class="btn btn-small" data-act="callHear">Tap to hear</button>' : '')
+    + `<button class="btn btn-icon${vc.mute ? ' on' : ''}" data-act="callMute" aria-pressed="${vc.mute}" aria-label="${vc.mute ? 'Unmute' : 'Mute'}" title="${vc.mute ? 'Unmute' : 'Mute'}">${vc.mute ? ICON.micOff : ICON.mic}</button>`
+    + `<button class="btn btn-hang" data-act="callLeave" aria-label="Leave call" title="Leave call">${ICON.phone}</button>`;
 }
 
 /* countdown shown on every device */
@@ -1124,6 +1324,7 @@ function timerHTML() {
 function render() {
   const v = view();
   const inRoom = !!role;
+  if (vc.on) vcSync(); else renderCall();
   $('#leaveBtn').hidden = !inRoom;
   $('#home').hidden = !!v;
   $('#lobby').hidden = !v || v.phase !== 'lobby';
@@ -1594,7 +1795,15 @@ const UI = {
   },
   rules: openRules,
   closeRules() { $('#rules').hidden = true; $('#rulesBtn').focus(); },
-  sound() { muted = !muted; ensureAudio(); $('#soundBtn').textContent = muted ? 'Sound off' : 'Sound on'; }
+  sound() { muted = !muted; ensureAudio(); $('#soundBtn').textContent = muted ? 'Sound off' : 'Sound on'; },
+  callJoin() { vcJoin(); },
+  callLeave() { vcStop(); renderCall(); },
+  callMute() {
+    vc.mute = !vc.mute;
+    if (vc.stream) vc.stream.getAudioTracks().forEach(t => { t.enabled = !vc.mute; });
+    vcAnnounce(); renderCall();
+  },
+  callHear() { vc.needTap = false; vc.calls.forEach(r => { if (r.el) r.el.play().catch(() => {}); }); renderCall(); }
 };
 function selectText(el) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
 
