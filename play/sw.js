@@ -1,5 +1,5 @@
-/* Spade & Speak offline cache. Version 5a9c57519c */
-const CACHE = 'sps-play-5a9c57519c';
+/* Spade & Speak offline cache. Version 36d2aafc49 */
+const CACHE = 'sps-play-36d2aafc49';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
