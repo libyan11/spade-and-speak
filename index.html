@@ -216,6 +216,12 @@ input[type="text"] { font: inherit; padding: .62em .8em; border-radius: 12px; bo
 .note b { color: #FFD66B; }
 .parked { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; border-radius: 14px; padding: 10px 12px 10px 14px; background: var(--stage-line); min-height: 52px; }
 .parked b { color: #FFD66B; }
+.awards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; width: 100%; max-width: 620px; margin: 6px auto 4px; text-align: left; }
+.award { background: var(--stage-line); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.award .aw-ic { font-size: 1.35rem; line-height: 1; }
+.award b { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: #FFD66B; }
+.award .aw-who { font-weight: 800; font-size: 1.02rem; overflow-wrap: anywhere; }
+.award small { opacity: .8; font-size: .82rem; }
 .play-actions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 12px; }
 .play-actions .btn { font-size: 1.25rem; padding: .95em .6em; }
 .btn-skip { background: transparent; color: var(--stage-fg); box-shadow: inset 0 0 0 2px var(--stage-fg); }
@@ -363,8 +369,8 @@ const HARDEST_WORDS = {
   random: 'Bureaucracy|Capitalism|Socialism|Communism|Feminism|Globalisation|Gentrification|Hypothesis|Philanthropy|Hypocrisy|Nepotism|Plagiarism|Serendipity|Schadenfreude|Euphemism|Onomatopoeia|Alliteration|Hyperbole|Oxymoron|Satire|Allegory|Renaissance|Industrial Revolution|Cold War|Enlightenment|Reformation|Feudalism|Magna Carta|Constitution|Filibuster|Impeachment|Coup|Diplomacy|Sovereignty|Ambassador|Embassy|Asylum|Inheritance|Insurance|Stock market|Dividend|Supply and demand|Existentialism|Utopia|Dystopia|Zeitgeist|Entrepreneur|Encryption|Bandwidth|Cloud computing|Machine learning|Quantum physics|Relativity|Entropy|Momentum|Friction|Inertia|Velocity|Probability|Statistics|Calculus|Prime number|Square root|Pythagoras\' theorem',
   nature: 'Bioluminescence|Chlorophyll|Symbiosis|Parasite|Camouflage|Echolocation|Germination|Decomposition|Osmosis|DNA|Bacteria|Virus|Fungus|Lichen|Continental drift|Pangaea|Sediment|Limestone|Granite|Quartz|Obsidian|Amber|Sinkhole|Oxbow lake|Water cycle|Jet stream|Trade winds|Cumulus cloud|Neutron star|Red giant|White dwarf|Quasar|Pulsar|Dark matter|Wormhole|Exoplanet|Andromeda galaxy|Orion\'s Belt|Halley\'s Comet|Kuiper belt|Dodo|Mammoth|Sabre-toothed tiger|Pterodactyl|Tyrannosaurus rex|Triceratops|Velociraptor|Stegosaurus|Brachiosaurus|Megalodon|Tardigrade|Blobfish|Anglerfish|Mantis shrimp|Cuttlefish|Nautilus|Aye-aye|Tasmanian devil|Quokka|Dugong|Cassowary|Shoebill|Fennec fox|Jerboa|Addax'
 };
-const MODES = { normal: 'Normal', hard: 'Hard', hardest: 'Hardest' };
-const MODE_HINT = { normal: 'Everyday words, a hard one now and then', hard: 'Harder words, mixed with some everyday ones', hardest: 'The toughest words, with some hard ones mixed in' };
+const MODES = { normal: 'Normal', hard: 'Hard', hardest: 'Hardest', arabic: 'عربي Arabic' };
+const MODE_HINT = { normal: 'Everyday words, a hard one now and then', hard: 'Harder words, mixed with some everyday ones', hardest: 'The toughest words, with some hard ones mixed in', arabic: 'Arabic words: Libyan and Arab places, food, people and everyday things' };
 /* hard words that are too obscure to drop into a Normal game (they still come up in Hard) */
 const TOO_TOUGH = {
   object: 'Astrolabe|Sextant|Pipette|Bellows|Lectern|Loom|Gramophone|Monocle|Spirit level|Tuning fork|Defibrillator|Metronome',
@@ -374,8 +380,18 @@ const TOO_TOUGH = {
   random: 'Census|Referendum|Overdraft|Limerick|Sonnet|Haiku|Palindrome|Paradox|Metaphor|Warranty|Pension|Red tape|Loophole|Propaganda|Recession|Etiquette|Conscience|Placebo|Algorithm',
   nature: 'Okapi|Tapir|Cormorant|Krill|Estuary|Delta|Permafrost|Mangrove|Tundra|Equinox|Solstice|Condensation|Stalagmite|Stalactite|Barracuda|Sea anemone|Nebula|Supernova|Eucalyptus|Baobab tree|Redwood tree|Tree sap|Tectonic plates|Ozone layer|Greenhouse effect|Marsupial|Amphibian'
 };
-const POOLS = { normal: WORDS, normalHard: {}, hard: {}, hardest: {} };
-const MIX = { normal: ['normalHard', 1 / 12], hard: ['normal', 0.25], hardest: ['hard', 0.25] };
+/* Arabic pack: Libyan and Arab places, food, people and everyday things, in Arabic */
+const ARABIC_WORDS = {
+  object: 'ثلاجة|غسالة|مكنسة|مروحة|مكيف|تلفزيون|ريموت|هاتف|شاحن|سماعة|ساعة|منبه|نظارة|مظلة|حقيبة|محفظة|مفتاح|قفل|باب|نافذة|كرسي|طاولة|سرير|وسادة|بطانية|سجادة|ستارة|مرآة|مشط|فرشاة أسنان|معجون أسنان|صابون|منشفة|شامبو|مقص|إبرة|خيط|زر|قلم|ممحاة|مسطرة|دفتر|كتاب|حاسوب|لوحة مفاتيح|فأرة الحاسوب|طابعة|كاميرا|مصباح|شمعة|ولاعة|كبريت|إبريق|فنجان|كأس|ملعقة|شوكة|سكين|صحن|قدر|مقلاة|فرن|ميكروويف|خلاط|محمصة خبز|غلاية|سلة|كيس|صندوق|سلم|مطرقة|مسمار|مفك|منشار|دلو|خرطوم|دراجة|سيارة|حافلة|طائرة|قطار|سفينة|قارب|دراجة نارية|خوذة|حذاء|جوارب|قميص|بنطلون|فستان|قبعة|شال|جاكيت|حزام|خاتم|عقد|سوار|عطر|مكواة|مجفف شعر|ميزان|ميزان حرارة|ضمادة|كرة|دمية|طائرة ورقية|بالون|أرجوحة|مزهرية|لوحة فنية|بوصلة|منظار|خريطة|علم|جرس|صافرة|طبلة|عود|كمان|بيانو|دف|مسبحة|فانوس|خيمة|كرسي متحرك|مصعد|درج|بطارية|مسدس ماء|نرد|شطرنج|مبخرة',
+  action: 'سباحة|ركض|قفز|مشي|نوم|أكل|شرب|طبخ|غسيل|كنس|كوي|رسم|كتابة|قراءة|غناء|رقص|ضحك|بكاء|صراخ|همس|تصفيق|عطس|سعال|تثاؤب|شخير|تصفير|تسلق|تزلج|صيد|خياطة|زراعة|حفر|تسوق|قيادة|طيران|غوص|تجديف|ملاكمة|مصارعة|رماية|سباق|اختباء|مطاردة|عناق|مصافحة|تلويح|غمز|عبوس|تفكير|نسيان|عد|رمي|ركل|تنظيف|ترتيب|تغليف|حلاقة|استحمام|تمشيط|ترحيب|وداع|اعتذار|كذب|غش|سرقة|هروب|انتظار|استيقاظ|تمثيل|تصوير|بحث|سفر|تخييم|شواء|عجن|تقشير|تقطيع|قلي|تذوق|مضغ|عض|شم|تجسس|صيام|عزف|تشجيع|احتفال|زغاريد|مزاح|دغدغة|تدليك|تأرجح|دحرجة|زحف|تعثر|سقوط|انزلاق|بناء|إصلاح|دهان|ترجمة|تدريس|حمل|دفع|سحب|عصر|نفخ|تنفس|تعرق|ارتجاف|تقليد|مساومة|نميمة|ثرثرة|تأخر|استعجال|تمدد|تفاوض|تصويت|تطريز|حياكة|تحميص|تسخين|تبريد|تعليق|إطعام|حراسة|تسلل|تهديف|تمرير|تحكيم|توصيل|تسجيل|تحديق|تصفح|برمجة|تجميل|تزيين',
+  world: 'ليبيا|طرابلس|بنغازي|مصراتة|سبها|درنة|طبرق|الزاوية|غدامس|لبدة الكبرى|شحات|الجبل الأخضر|غريان|زليتن|البيضاء|سرت|الكفرة|غات|مصر|القاهرة|الإسكندرية|الأقصر|الأهرامات|أبو الهول|نهر النيل|قناة السويس|تونس|جربة|القيروان|الجزائر|وهران|المغرب|مراكش|الدار البيضاء|فاس|طنجة|موريتانيا|السودان|الخرطوم|السعودية|الرياض|جدة|الإمارات|دبي|أبوظبي|برج خليفة|قطر|الدوحة|الكويت|البحرين|سلطنة عمان|مسقط|اليمن|صنعاء|الأردن|عمّان|البتراء|البحر الميت|فلسطين|القدس|غزة|لبنان|بيروت|سوريا|دمشق|حلب|العراق|بغداد|البصرة|تركيا|إسطنبول|باكستان|الهند|تاج محل|الصين|سور الصين العظيم|اليابان|طوكيو|كوريا|روسيا|موسكو|فرنسا|باريس|برج إيفل|إيطاليا|روما|البندقية|إسبانيا|مدريد|برشلونة|الأندلس|غرناطة|قصر الحمراء|ألمانيا|برلين|بريطانيا|لندن|ساعة بيغ بن|هولندا|سويسرا|اليونان|أثينا|أمريكا|نيويورك|تمثال الحرية|هوليوود|لاس فيغاس|كندا|البرازيل|الأرجنتين|المكسيك|أستراليا|القطب الشمالي|القطب الجنوبي|الصحراء الكبرى|البحر المتوسط|المحيط الأطلسي|المحيط الهادئ|جبال الألب|جبل إفرست|غابات الأمازون|أفريقيا|أوروبا|آسيا|ماليزيا|إندونيسيا|جزر المالديف|نيجيريا|كينيا|جنوب أفريقيا|مالطا|قبرص|صقلية|تشاد|النيجر|البرتغال|بلجيكا|السويد',
+  person: 'محمد صلاح|عمر المختار|صلاح الدين الأيوبي|ابن بطوطة|هارون الرشيد|ابن سينا|الخوارزمي|ابن خلدون|المتنبي|عنترة بن شداد|أبو زيد الهلالي|طارق بن زياد|ابن الهيثم|ابن رشد|جحا|شهرزاد|شهريار|سندباد|علاء الدين|علي بابا|أم كلثوم|فيروز|عبد الحليم حافظ|محمد عبده|عمرو دياب|نانسي عجرم|كاظم الساهر|راغب علامة|إليسا|تامر حسني|محمد منير|عادل إمام|سعاد حسني|نجيب محفوظ|نزار قباني|محمود درويش|جبران خليل جبران|أحمد زويل|زها حديد|رياض محرز|حكيم زياش|زين الدين زيدان|أبو تريكة|ياسين بونو|طارق التائب|ميسي|كريستيانو رونالدو|نيمار|مبابي|محمد علي كلاي|مايكل جاكسون|أينشتاين|نيوتن|شكسبير|ليوناردو دافنشي|نابليون|كليوباترا|توت عنخ آمون|الإسكندر الأكبر|غاندي|نيلسون مانديلا|ستيف جوبز|بيل غيتس|إيلون ماسك|مارك زوكربيرغ|توم كروز|جاكي شان|بروس لي|مستر بين|شارلي شابلن|هاري بوتر|سبايدرمان|باتمان|سوبرمان|الرجل الحديدي|هالك|ميكي ماوس|توم وجيري|سبونج بوب|بينوكيو|سندريلا|سنو وايت|بابا نويل|شرلوك هولمز|جيمس بوند|طرزان|باباي|السنافر|كابتن ماجد|المحقق كونان|عدنان ولينا|بيكاتشو|ماريو|سونيك|الملكة إليزابيث|رامبو|دراكولا|روبن هود|الجوكر|فرانكنشتاين|ماوكلي|ريمي|سالي|غرندايزر|النمر الوردي',
+  random: 'رمضان|عيد|عرس|حنة|زفة|سحور|إفطار|فطور|غداء|عشاء|كسكسي|بازين|مبكبكة|عصيدة|شربة ليبية|عصبان|مقروض|سفنز|بسيسة|زميتة|طاجين|شاي|قهوة|شاي بالكاكاوية|كعك|بقلاوة|كنافة|بسبوسة|شاورما|فلافل|حمص|فول|ملوخية|كبسة|منسف|مندي|محشي|بيتزا|برغر|معكرونة|سلطة|خبز|تمر|عسل|زيت زيتون|حليب|جبن|بيض|شوكولاتة|آيس كريم|فشار|عصير|مدرسة|جامعة|مستشفى|مطار|سوق|ملعب|حديقة|مكتبة|متحف|سينما|سيرك|حديقة حيوان|مخبز|صيدلية|بنك|فندق|مطعم|مقهى|عيد ميلاد|حفلة|رحلة|نزهة|امتحان|واجب مدرسي|عطلة|كأس العالم|ضربة جزاء|بطاقة حمراء|هدف|كرة القدم|الأولمبياد|إنترنت|واي فاي|كلمة سر|سيلفي|يوتيوب|تيك توك|إنستغرام|واتساب|بريد إلكتروني|ألعاب فيديو|بلايستيشن|كهرباء|انقطاع الكهرباء|زحمة سير|إشارة مرور|بنزين|طابور|كابوس|سر|وعد|كذبة|مفاجأة|هدية|حظ|سعادة|غيرة|خوف|حب|صداقة|ملل|جوع|عطش|نعاس|صداع|زكام|دواء|طبيب|مهندس|معلم|شرطي|إطفائي|طيار|طباخ|خباز|حلاق|نجار|سباك|ميكانيكي|جندي|محامي|قاضي|ممرضة|صحفي|مذيع|مدرب|فلاح|راعي غنم|تاجر|سائق تاكسي|ساعي البريد|رائد فضاء|قرصان|نينجا|ساحر|شبح|غول|تنين|حورية البحر|ديناصور|روبوت|كائن فضائي|كنز|خريطة كنز|مصباح سحري|بساط الريح|مهرجان|حفل موسيقي|مسرح|دومينو|ورق اللعب|غميضة|نط الحبل|كرة السلة|تنس|عروس|عريس|جد|توأم|جيران|ضيوف|سيارة إسعاف|عيد الأم|الصيف|الشتاء|منتصف الليل|عطلة نهاية الأسبوع',
+  nature: 'أسد|نمر|فيل|زرافة|حمار وحشي|قرد|غوريلا|دب|ذئب|ثعلب|أرنب|سنجاب|فأر|قطة|كلب|حصان|حمار|جمل|بقرة|خروف|ماعز|دجاجة|ديك|بطة|حمامة|نسر|صقر|بومة|ببغاء|طاووس|نعامة|بطريق|دلفين|حوت|قرش|أخطبوط|سلحفاة|تمساح|ثعبان|سحلية|ضفدع|فراشة|نحلة|نملة|عنكبوت|عقرب|بعوضة|ذبابة|صرصور|حلزون|دودة|سمكة|سلطعون|قنديل البحر|نجم البحر|كنغر|باندا|كوالا|فهد|غزال|وحيد القرن|فرس النهر|خفاش|قنفذ|وردة|عباد الشمس|نخلة|شجرة زيتون|صبار|عشب|فطر|غابة|جبل|بركان|صحراء|واحة|كثبان رملية|بحر|نهر|بحيرة|شلال|كهف|جزيرة|شاطئ|موجة|مطر|ثلج|برق|رعد|عاصفة|إعصار|زلزال|قوس قزح|ضباب|رياح|القبلي|شمس|قمر|نجمة|كوكب|المريخ|زحل|نيزك|كسوف الشمس|هلال|سحابة|جليد|نار|دخان|رمل|طين|خريف|ربيع|شروق الشمس|غروب الشمس|ياسمين|تفاحة|برتقالة|بطيخ|عنب|رمان|تين|موز|ليمون|فراولة|جزر|بصل|طماطم|فلفل حار|زيتون'
+};
+const POOLS = { normal: WORDS, normalHard: {}, hard: {}, hardest: {}, arabic: {} };
+const MIX = { normal: ['normalHard', 1 / 12], hard: ['normal', 0.25], hardest: ['hard', 0.25], arabic: ['arabic', 0] };
+Object.keys(ARABIC_WORDS).forEach(k => { POOLS.arabic[k] = ARABIC_WORDS[k].split('|'); });
 Object.keys(HARD_MORE).forEach(k => {
   const tough = new Set(TOO_TOUGH[k].split('|'));
   POOLS.normalHard[k] = HARD_WORDS[k].filter(w => !tough.has(w));
@@ -557,6 +573,33 @@ function newTurn(mode, cat, describer) {
   Object.values(S.decks).forEach(shuffle);   // fresh random order at the start of every turn
   return { mode, cat, describer, card: null, parked: null, skipUsed: false, records: [], left: TURN_SECONDS, paused: false, note: null };
 }
+/* end-of-game awards, worked out from the log of turns */
+function awardsHTML(log, teams) {
+  if (!log || !log.length) return '';
+  const nm = e => e.d || teams[e.t].name;
+  const people = {}, fouls = {}, zeros = {}, teamWords = teams.map(() => 0);
+  log.forEach(e => {
+    teamWords[e.t] += e.n;
+    if (e.d) people[e.d] = (people[e.d] || 0) + e.n;
+    if (e.f) fouls[nm(e)] = (fouls[nm(e)] || 0) + e.f;
+    if (!e.n) zeros[nm(e)] = (zeros[nm(e)] || 0) + 1;
+  });
+  const top = o => Object.entries(o).sort((a, b) => b[1] - a[1])[0];
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const cards = [];
+  const star = top(people);
+  if (star && star[1] > 0) cards.push(['🗣️', 'Star describer', star[0], `${plural(star[1], 'word')} described`]);
+  const best = log.reduce((a, e) => e.n > a.n ? e : a, log[0]);
+  if (best.n > 0) cards.push(['⚡', 'Best turn', nm(best), `${best.n} right in one turn`]);
+  const ti = teamWords.indexOf(Math.max(...teamWords));
+  cards.push(['📚', 'Most words', teams[ti].name, `${plural(teamWords[ti], 'word')} all game`]);
+  const fm = top(fouls);
+  if (fm) cards.push(['🚩', 'Foul magnet', fm[0], `${plural(fm[1], 'card')} lost to fouls`]);
+  const tl = top(zeros);
+  if (tl) cards.push(['😅', 'Tough luck', tl[0], `${plural(tl[1], 'turn')} with none right`]);
+  return `<p class="eyebrow" style="margin-top:6px">Awards</p><div class="awards">${cards.map(([ic, title, who, what]) =>
+    `<div class="award"><span class="aw-ic" aria-hidden="true">${ic}</span><b>${title}</b><span class="aw-who" dir="auto">${esc(who)}</span><small>${what}</small></div>`).join('')}</div>`;
+}
 function membersOf(ti, v = S) { return v.players.filter(p => p.team === ti); }
 function teamOf(pid, v = S) { const p = v.players.find(x => x.id === pid); return p ? p.team : null; }
 function nameOf(pid, v = S) { const p = v.players.find(x => x.id === pid); return p ? p.name : 'Someone'; }
@@ -571,7 +614,7 @@ function newLobby(code) {
   return {
     phase: 'lobby', code, hostId: me, players: [{ id: me, name: myName, team: 0, online: true }],
     teamCount: 2, teamNames: DEFAULT_NAMES.slice(), len: 25, words: 'normal', teams: [], spaces: [], cur: 0, decks: {},
-    turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null
+    turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null, log: []
   };
 }
 function teamsReady() {
@@ -583,7 +626,7 @@ function teamsReady() {
 function startGame() {
   S.teams = Array.from({ length: S.teamCount }, (_, i) => ({ name: S.teamNames[i], color: TEAM_COLORS[i], pos: 0, desc: 0 }));
   S.spaces = buildSpaces(S.len);
-  Object.assign(S, { phase: 'idle', cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+  Object.assign(S, { phase: 'idle', cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null, log: [] });
 }
 
 /* host timer */
@@ -759,6 +802,7 @@ function handleAct(pid, act, d) {
     confirmMove() {
       if (ph !== 'review' || !isD || tr.records.some(r => r.status === 'challenged')) return;
       const t = S.teams[S.cur], n = tr.records.filter(r => r.ok).length;
+      (S.log = S.log || []).push({ t: S.cur, d: nameOf(tr.describer), n, f: tr.records.filter(r => r.res === 'foul').length });
       if (tr.mode === 'final') { if (n > 0) { S.winner = S.cur; S.phase = 'win'; } else S.phase = 'final-fail'; return; }
       const { from, to } = moveTeam(S.cur, n);
       S.last = n === 0 ? `${t.name} didn't get any this time.` : `${t.name} got ${n} right and moved to ${posLabel(to)}.`;
@@ -769,12 +813,12 @@ function handleAct(pid, act, d) {
     rematch() {
       if (!host || ph !== 'win') return;
       S.teams.forEach(t => { t.pos = 0; t.desc = 0; });
-      Object.assign(S, { phase: 'idle', cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+      Object.assign(S, { phase: 'idle', cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null, log: [] });
     },
     toLobby() {
       if (!host) return;
       hostStopTimer();
-      Object.assign(S, { phase: 'lobby', teams: [], cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null });
+      Object.assign(S, { phase: 'lobby', teams: [], cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null, log: [] });
     }
   };
   if (A[act]) { A[act](); broadcast(); }
@@ -1133,6 +1177,7 @@ function renderHome() {
       <p class="eyebrow">Online · classic rules · 30-second turns</p>
       <h1>Describe it fast. Race round the ring.</h1>
       <p class="lede">Play on your own phones from anywhere. One person creates a game and shares the room code. Everyone else joins with it and picks a team. No accounts needed.</p>
+      <p class="muted" style="font-size:.92rem;margin:0 0 12px">No internet? <a href="play/" style="color:inherit;font-weight:700">Play on one phone instead</a>. It works offline and you can add it to your home screen.</p>
       <div class="board-wrap" style="max-width:340px;margin:0">${boardSVG(buildSpaces(40), false)}</div>
     </div>
     <form class="home-card" id="homeForm" autocomplete="off">
@@ -1287,7 +1332,7 @@ function driveWheel(sp) {
 }
 
 function cardHTML(cat, word, band, right, extraCls) {
-  return `<div class="card-stack"><div class="card cat-${cat} ${extraCls || ''}"><div class="card-band"><span>${band}</span><span>${right}</span></div><div class="card-word">${word}</div></div></div>`;
+  return `<div class="card-stack"><div class="card cat-${cat} ${extraCls || ''}"><div class="card-band"><span>${band}</span><span>${right}</span></div><div class="card-word" dir="auto">${word}</div></div></div>`;
 }
 
 const STAGE = {
@@ -1429,6 +1474,7 @@ const STAGE = {
       <p class="eyebrow">Winners</p>
       <h2 class="win-name" style="--team:${t.color}">${esc(t.name)}</h2>
       <p class="sub">${membersOf(v.winner, v).map(p => esc(p.name)).join(', ')} made it round the ring and nailed the final card.</p>
+      ${awardsHTML(v.log, v.teams)}
       ${role === 'host'
         ? `<div class="row" style="justify-content:center"><button class="btn btn-go btn-lg" data-act="rematch">Rematch, same teams</button><button class="btn btn-ghost btn-lg" data-act="toLobby">Back to lobby</button></div>`
         : `<p class="sub">Waiting for the host to start a rematch.</p>`}
@@ -1502,7 +1548,7 @@ function openRules() {
       <li>The final card can be challenged too, before the win counts.</li>
     </ul></section>
     <section><h3>Spades ♠</h3><p>A spade space has no single category. When your turn starts on one, every card can come from any category. It's a normal turn, not an extra go.</p></section>
-    <section><h3>Word level</h3><p><b>Normal</b>: everyday words, with a harder one now and then (marked ★ Hard). <b>Hard</b>: harder words, with an everyday one now and then. <b>Hardest</b>: the toughest words, with some hard ones mixed in. Action words are always one word.</p></section>
+    <section><h3>Word level</h3><p><b>Normal</b>: everyday words, with a harder one now and then (marked ★ Hard). <b>Hard</b>: harder words, with an everyday one now and then. <b>Hardest</b>: the toughest words, with some hard ones mixed in. Action words are always one word. <b>عربي Arabic</b>: every card is in Arabic, with Libyan and Arab places, food and famous people.</p></section>
     <section><h3>Spinners</h3><p>End your turn on a spinner space (the red and green circle) and your team spins the wheel: +1, +2, −1 or −2. Then you choose any team to move by that amount: your own team, or a team you want to slow down. Moving because of the spinner doesn't set off another spade or spinner.</p></section>
     <section><h3>Winning</h3><p>Reaching the finish isn't enough. On your next turn, the other teams choose a category and you must get 1 card right before the time runs out. Miss it and try again next turn. The first team to pass the final challenge wins.</p></section>
   </div>`;

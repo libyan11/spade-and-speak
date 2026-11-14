@@ -1,0 +1,1217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#5A3ED8">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Spade &amp; Speak">
+<title>Spade &amp; Speak</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Lilita+One&display=swap">
+<style>
+/* Layout: ring board on the left, turn panel on the right; every turn plays on a full-screen card stage */
+:root {
+  --bg: #E7E9F4;
+  --surface: #FFFFFF;
+  --plate: #FFFFFF;
+  --ink: #1F1B3F;
+  --muted: #5F5B80;
+  --line: #D2D4E6;
+  --shadow: rgba(31, 27, 63, .35);
+  --accent: #5A3ED8;
+  --accent-deep: #3E28A6;
+  --on-accent: #FFFFFF;
+  --good: #1E9B5A;
+  --good-deep: #157443;
+  --bad: #D9363E;
+  --finish: #1F1B3F;
+  --stage: #1F1B3F;
+  --stage-2: #2B2655;
+  --stage-fg: #FFFFFF;
+  --stage-muted: #B9B4DD;
+  --stage-line: rgba(255, 255, 255, .16);
+  --card: #FFFFFF;
+  --card-ink: #1F1B3F;
+  --spade-badge: #1F1B3F;
+  --c-object: #2F6FED;
+  --c-action: #EF7D1A;
+  --c-world: #E9B520;
+  --c-person: #E2414B;
+  --c-random: #8B4CC4;
+  --c-nature: #22A069;
+  --f-display: 'Lilita One', 'Arial Rounded MT Bold', 'Trebuchet MS', system-ui, sans-serif;
+  --f-body: 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14122B; --surface: #1F1C3E; --plate: #1F1C3E; --ink: #F1EFFF; --muted: #ABA6CF;
+    --line: #322E5C; --shadow: rgba(0, 0, 0, .6); --accent: #8F78FF; --accent-deep: #5A3ED8; --on-accent: #120F2A;
+    --finish: #F1EFFF; --stage: #0D0B20; --stage-2: #1B1840; --stage-muted: #A39ECB; --spade-badge: #1F1B3F;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14122B; --surface: #1F1C3E; --plate: #1F1C3E; --ink: #F1EFFF; --muted: #ABA6CF;
+  --line: #322E5C; --shadow: rgba(0, 0, 0, .6); --accent: #8F78FF; --accent-deep: #5A3ED8; --on-accent: #120F2A;
+  --finish: #F1EFFF; --stage: #0D0B20; --stage-2: #1B1840; --stage-muted: #A39ECB; --spade-badge: #1F1B3F;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--f-body); font-size: 16px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+body.locked { overflow: hidden; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 400; line-height: 1.05; margin: 0; text-wrap: balance; letter-spacing: .005em; }
+p { margin: 0; }
+#app { max-width: 1180px; margin: 0 auto; padding-block: 14px 48px; }
+
+.cat-object { --cat: var(--c-object); --cat-fg: #fff; }
+.cat-action { --cat: var(--c-action); --cat-fg: #fff; }
+.cat-world  { --cat: var(--c-world);  --cat-fg: #2B2104; }
+.cat-person { --cat: var(--c-person); --cat-fg: #fff; }
+.cat-random { --cat: var(--c-random); --cat-fg: #fff; }
+.cat-nature { --cat: var(--c-nature); --cat-fg: #fff; }
+.cat-any    { --cat: linear-gradient(100deg, var(--c-object), var(--c-action), var(--c-world), var(--c-person), var(--c-random), var(--c-nature)); --cat-fg: #fff; }
+.cat-any b, .cat-any span { text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
+.pill { display: inline-flex; align-items: center; gap: 6px; background: var(--cat); color: var(--cat-fg); font-weight: 800; border-radius: 999px; padding: .2em .8em; font-size: .9rem; letter-spacing: .02em; }
+.eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; font-weight: 800; color: var(--muted); }
+
+/* Header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-block: 2px 18px; }
+.brand { display: flex; align-items: center; gap: 12px; font-family: var(--f-display); font-size: 1.65rem; }
+.brand-mark { width: 40px; height: 40px; border-radius: 12px; background: var(--ink); color: var(--bg); display: grid; place-items: center; font-size: 1.35rem; transform: rotate(-8deg); }
+.top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Buttons */
+.btn {
+  font: inherit; font-weight: 700; border: 0; border-radius: 14px; padding: .65em 1.1em; cursor: pointer;
+  background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line);
+  transition: transform .12s, filter .12s, opacity .12s; touch-action: manipulation;
+}
+.btn:hover { filter: brightness(1.05); }
+.btn:active { transform: translateY(2px) scale(.985); }
+.btn:focus-visible, input:focus-visible, .rv:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.btn-primary { background: var(--accent); color: var(--on-accent); box-shadow: 0 4px 0 var(--accent-deep); }
+.btn-lg { font-size: 1.15rem; padding: .85em 1.4em; }
+.btn-go { background: var(--good); color: #fff; box-shadow: 0 5px 0 var(--good-deep); }
+.btn-ghost { background: transparent; color: inherit; box-shadow: inset 0 0 0 1.5px currentColor; }
+.btn-small { font-size: .9rem; padding: .5em .9em; }
+
+/* Setup */
+.setup-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+.setup-form { display: flex; flex-direction: column; gap: 22px; }
+.setup-form h1 { font-size: clamp(2.2rem, 5vw, 3.3rem); }
+.setup-form .lede { color: var(--muted); max-width: 46ch; }
+.field { display: flex; flex-direction: column; gap: 8px; }
+.label { font-weight: 800; font-size: .95rem; }
+.seg-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg-group button { font: inherit; font-weight: 700; border: 0; cursor: pointer; padding: .55em 1em; border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); min-width: 48px; }
+.seg-group button[aria-pressed="true"] { background: var(--ink); color: var(--bg); box-shadow: none; }
+.seg-group button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.teams { display: flex; flex-direction: column; gap: 10px; }
+.team-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.25fr); gap: 8px; align-items: center; }
+.swatch { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; box-shadow: 0 0 0 3px var(--surface), 0 0 0 4.5px var(--line); }
+input[type="text"] { font: inherit; padding: .62em .8em; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); min-width: 0; width: 100%; }
+input::placeholder { color: var(--muted); opacity: .8; }
+.resume { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: var(--surface); border-radius: 16px; padding: 14px 16px; box-shadow: inset 0 0 0 1.5px var(--accent); }
+.setup-board { display: flex; flex-direction: column; gap: 16px; }
+
+/* Board */
+.board-wrap { position: relative; width: 100%; max-width: 560px; margin-inline: auto; aspect-ratio: 1; }
+.board-wrap svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.plate { fill: var(--plate); }
+.board-shadow { fill: var(--shadow); opacity: .25; }
+.seg { stroke: var(--plate); stroke-width: 1.4; }
+.seg-object { fill: var(--c-object); } .seg-action { fill: var(--c-action); } .seg-world { fill: var(--c-world); }
+.seg-person { fill: var(--c-person); } .seg-random { fill: var(--c-random); } .seg-nature { fill: var(--c-nature); }
+.seg-finish { fill: var(--finish); }
+.seg-lbl.lbl-any { paint-order: stroke; stroke: rgba(0, 0, 0, .45); stroke-width: 2px; }
+.spade circle { fill: var(--spade-badge); stroke: #fff; stroke-width: 1.2; }
+.spade text { fill: #fff; font-size: 11px; font-family: var(--f-body); }
+.fin-glyph { fill: var(--plate); font-size: 11px; }
+.seg-lbl { font-family: var(--f-body); font-weight: 800; fill: #fff; pointer-events: none; }
+.seg-lbl.lbl-world { fill: #2B2104; }
+.seg-lbl.lbl-finish { fill: var(--plate); }
+.divider { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; }
+.ring-label { fill: var(--muted); font-family: var(--f-body); font-weight: 800; font-size: 8.5px; letter-spacing: 1.3px; }
+.tok { transition: transform .26s cubic-bezier(.3, 1.5, .5, 1); }
+.tok .body { stroke: #fff; stroke-width: 2.2; }
+.tok .halo { fill: none; stroke: var(--ink); stroke-width: 2; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.tok.active .halo { animation: halo 1.5s ease-out infinite; }
+.tok-t { fill: #fff; font-family: var(--f-body); font-weight: 800; pointer-events: none; }
+@keyframes halo { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.9); } }
+.board-center { position: absolute; inset: 28%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; }
+.bc-team { font-family: var(--f-display); font-size: clamp(1.05rem, 3.2vw, 1.6rem); line-height: 1.05; text-wrap: balance; display: flex; align-items: center; gap: 8px; }
+.bc-sub { color: var(--muted); font-size: .85rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dot { width: 14px; height: 14px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px var(--plate), 0 0 0 3.5px var(--line); }
+.legend { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 8px; justify-content: center; }
+.legend li { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
+.legend .pill { font-size: .8rem; }
+.legend .spade-key { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--spade-badge); color: #fff; font-size: .8rem; }
+.legend .spin-key { width: 22px; height: 22px; display: block; }
+
+/* Game */
+.game { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 32px; align-items: start; }
+.board-col { display: flex; flex-direction: column; gap: 16px; }
+.panel { display: flex; flex-direction: column; gap: 16px; }
+.turn-card { background: var(--surface); border-radius: 22px; padding: 22px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 0 var(--line), 0 18px 34px -24px var(--shadow); }
+.turn-card h2 { font-size: clamp(1.8rem, 4vw, 2.4rem); display: flex; align-items: center; gap: 10px; }
+.turn-card .dot { width: 18px; height: 18px; }
+.cat-block { background: var(--cat); color: var(--cat-fg); border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.cat-block b { font-family: var(--f-display); font-weight: 400; font-size: 1.7rem; line-height: 1.1; }
+.cat-block span { font-size: .9rem; opacity: .9; font-weight: 600; }
+.final-block { border-radius: 16px; padding: 14px 16px; background: var(--ink); color: var(--bg); }
+.final-block b { font-family: var(--f-display); font-weight: 400; font-size: 1.5rem; display: block; }
+.muted { color: var(--muted); }
+.race { background: var(--surface); border-radius: 22px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 0 var(--line); }
+.race h3 { font-size: 1.2rem; }
+.race-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; }
+.race-name { display: flex; align-items: center; gap: 8px; font-weight: 700; min-width: 0; }
+.race-name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.race-row.is-cur .race-name { color: var(--accent); }
+.race-pos { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .85rem; font-weight: 700; }
+.bar { grid-column: 1 / -1; height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 99px; transition: width .4s; }
+.last { font-size: .92rem; color: var(--muted); padding-inline: 4px; }
+
+/* Stage */
+#stage {
+  position: fixed; inset: 0; z-index: 50; background: radial-gradient(120% 80% at 50% 0%, var(--stage-2), var(--stage) 70%); color: var(--stage-fg);
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 18px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+}
+.stage-inner { width: 100%; max-width: 640px; margin: auto; display: flex; flex-direction: column; gap: 18px; }
+.stage-inner h2 { font-size: clamp(2rem, 6vw, 3rem); }
+.stage-inner .eyebrow { color: var(--stage-muted); }
+.stage-inner .sub { color: var(--stage-muted); font-size: 1.05rem; }
+.rules-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.rules-list li { background: var(--stage-line); border-radius: 12px; padding: 10px 12px; font-weight: 600; font-size: .95rem; display: flex; gap: 8px; align-items: baseline; }
+.rules-list li::before { content: "✕"; color: #FF8A8F; font-weight: 800; }
+.house { border-radius: 14px; padding: 12px 14px; box-shadow: inset 0 0 0 1.5px var(--stage-line); font-size: .95rem; }
+.house b { color: #FFD66B; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row .grow { flex: 1 1 200px; }
+
+.play-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.timer { position: relative; width: 92px; height: 92px; flex: none; }
+.timer svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.timer .track { fill: none; stroke: var(--stage-line); stroke-width: 8; }
+.timer .prog { fill: none; stroke: #FFD66B; stroke-width: 8; stroke-linecap: round; }
+.timer.low .prog { stroke: #FF5A63; }
+.timer span { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--f-display); font-size: 2.2rem; font-variant-numeric: tabular-nums; }
+.timer.low span { color: #FF8A8F; animation: thump 1s infinite; }
+@keyframes thump { 0%, 100% { transform: scale(1); } 15% { transform: scale(1.14); } }
+.tally { text-align: right; }
+.tally b { font-family: var(--f-display); font-weight: 400; font-size: 2.4rem; line-height: 1; display: block; font-variant-numeric: tabular-nums; }
+.tally span { color: var(--stage-muted); font-size: .85rem; font-weight: 700; }
+
+.card-stack { position: relative; }
+.card-stack::before { content: ""; position: absolute; inset: 8px -6px -8px 6px; border-radius: 24px; background: var(--card); opacity: .18; transform: rotate(2.5deg); }
+.card { position: relative; background: var(--card); color: var(--card-ink); border-radius: 24px; overflow: hidden; box-shadow: 0 24px 50px -20px rgba(0, 0, 0, .7); animation: deal .3s cubic-bezier(.2, .9, .3, 1.25); }
+.card-band { background: var(--cat); color: var(--cat-fg); padding: 10px 18px; display: flex; justify-content: space-between; gap: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: .85rem; }
+.card-word { min-height: 210px; display: grid; place-items: center; text-align: center; padding: 26px 20px; font-family: var(--f-display); font-size: clamp(2.3rem, 9vw, 4.3rem); line-height: 1.02; text-wrap: balance; overflow-wrap: anywhere; }
+.card.paused .card-word { color: var(--muted); font-size: 2rem; }
+@keyframes deal { from { transform: translateX(46px) rotate(5deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.parked { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; border-radius: 14px; padding: 10px 12px 10px 14px; background: var(--stage-line); min-height: 52px; }
+.parked b { color: #FFD66B; }
+.awards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; width: 100%; max-width: 620px; margin: 6px auto 4px; text-align: left; }
+.award { background: var(--stage-line); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.award .aw-ic { font-size: 1.35rem; line-height: 1; }
+.award b { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: #FFD66B; }
+.award .aw-who { font-weight: 800; font-size: 1.02rem; overflow-wrap: anywhere; }
+.award small { opacity: .8; font-size: .82rem; }
+.play-actions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 12px; }
+.play-actions .btn { font-size: 1.25rem; padding: .95em .6em; }
+.btn-skip { background: transparent; color: var(--stage-fg); box-shadow: inset 0 0 0 2px var(--stage-fg); }
+.play-foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.link { font: inherit; background: none; border: 0; color: var(--stage-muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 6px 2px; font-weight: 600; }
+.link:focus-visible { outline: 3px solid #FFD66B; outline-offset: 2px; border-radius: 6px; }
+.kbd-hint { color: var(--stage-muted); font-size: .8rem; }
+
+.review-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.rv { width: 100%; font: inherit; text-align: left; cursor: pointer; border: 0; border-radius: 14px; padding: 10px 12px; background: var(--stage-line); color: var(--stage-fg); display: flex; flex-direction: column; gap: 2px; }
+.rv-word { font-weight: 800; font-size: 1.05rem; }
+.rv-tag { font-size: .8rem; color: var(--stage-muted); font-weight: 700; }
+.rv.ok { background: var(--good); }
+.rv.ok .rv-tag { color: #D5F7E4; }
+.move-line { font-size: 1.15rem; }
+.move-line b { font-family: var(--f-display); font-weight: 400; font-size: 2rem; color: #FFD66B; }
+
+.spade-big { width: 86px; height: 86px; border-radius: 26px; background: var(--stage-fg); color: var(--stage); display: grid; place-items: center; font-size: 3.2rem; transform: rotate(-8deg); }
+.cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.cat-btn { background: var(--cat); color: var(--cat-fg); box-shadow: 0 4px 0 rgba(0, 0, 0, .3); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px 16px; text-align: left; }
+.cat-btn b { font-family: var(--f-display); font-weight: 400; font-size: 1.5rem; line-height: 1.1; }
+.cat-btn span { font-size: .85rem; font-weight: 600; opacity: .9; }
+.win-name { font-size: clamp(2.8rem, 11vw, 5.4rem) !important; color: var(--team); text-shadow: 0 4px 0 rgba(0, 0, 0, .35); }
+.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 60; }
+.confetti i { position: absolute; top: -20px; width: 10px; height: 16px; border-radius: 3px; animation: fall linear forwards; }
+@keyframes fall { to { transform: translateY(110vh) rotate(720deg); } }
+.wheel-wrap { position: relative; width: min(280px, 72vw); aspect-ratio: 1; margin-inline: auto; }
+.wheel-wrap svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.wheel-pin { fill: #FFD66B; stroke: var(--stage); stroke-width: 3; stroke-linejoin: round; }
+.wheel-lbl { font-family: var(--f-display); font-size: 24px; fill: #fff; }
+.spin-result { text-align: center; font-family: var(--f-display); font-size: clamp(3rem, 14vw, 5rem); line-height: 1; color: #FFD66B; }
+.spin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.spin-btn { background: var(--team); color: #fff; box-shadow: 0 4px 0 rgba(0, 0, 0, .35); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 12px 14px; }
+.spin-btn span { font-size: .85rem; font-weight: 600; opacity: .92; }
+.btn-foul { background: #D9363E; color: #fff; box-shadow: 0 4px 0 #9E1F26; }
+.btn-fair { background: var(--good); color: #fff; box-shadow: 0 4px 0 var(--good-deep); }
+.rv-item { display: flex; flex-direction: column; gap: 6px; }
+.rv.flag { box-shadow: inset 0 0 0 2px #FF5A63; }
+.rv-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.rv-actions .btn { font-size: .8rem; padding: .4em .7em; border-radius: 10px; }
+.vote-box { border-radius: 18px; padding: 16px; background: var(--stage-line); display: flex; flex-direction: column; gap: 12px; box-shadow: inset 0 0 0 2px #FF5A63; }
+.vote-box h3 { font-size: 1.4rem; }
+.vote-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.counter { display: flex; flex-direction: column; align-items: center; gap: 8px; border-radius: 14px; padding: 12px 8px; background: rgba(0, 0, 0, .18); }
+.counter > span { font-weight: 800; font-size: .95rem; }
+.counter div { display: flex; align-items: center; gap: 10px; }
+.counter b { font-family: var(--f-display); font-weight: 400; font-size: 2.2rem; min-width: 1.4em; text-align: center; font-variant-numeric: tabular-nums; }
+.counter .btn { width: 44px; height: 44px; padding: 0; font-size: 1.4rem; }
+
+/* Rules modal */
+.modal { position: fixed; inset: 0; z-index: 80; background: rgba(10, 8, 30, .62); display: flex; padding: calc(env(safe-area-inset-top, 0px) + 16px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 16px) max(16px, env(safe-area-inset-left, 0px)); overflow-y: auto; }
+.modal-panel { margin: auto; width: 100%; max-width: 680px; background: var(--surface); color: var(--ink); border-radius: 24px; padding: 26px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 30px 70px -20px rgba(0, 0, 0, .6); }
+.modal-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.modal-head h2 { font-size: 2rem; }
+.modal-panel h3 { font-size: 1.2rem; margin-bottom: 4px; }
+.modal-panel ul, .modal-panel ol { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; max-width: 62ch; }
+.modal-panel section { display: flex; flex-direction: column; gap: 4px; }
+.cat-table { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.cat-table div { display: flex; flex-direction: column; gap: 2px; font-size: .88rem; color: var(--muted); }
+.cat-table .pill { align-self: flex-start; }
+
+@media (max-width: 880px) {
+  .setup-grid, .game { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .board-wrap { max-width: 480px; }
+}
+@media (max-width: 560px) {
+  .team-row { grid-template-columns: auto minmax(0, 1fr); }
+  .team-row input:last-child { grid-column: 2; }
+  .play-actions .btn { font-size: 1.1rem; }
+  .card-word { min-height: 170px; }
+  .modal-panel { padding: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  .confetti { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header class="top">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">♠</span>Spade &amp; Speak</div>
+    <div class="top-actions">
+      <button class="btn btn-small" data-act="rules" id="rulesBtn">Rules</button>
+      <button class="btn btn-small" data-act="sound" id="soundBtn">Sound on</button>
+      <button class="btn btn-small" data-act="newgame" id="newBtn" hidden>New game</button>
+    </div>
+  </header>
+  <section id="setup"></section>
+  <section id="game" hidden>
+    <div class="game">
+      <div class="board-col">
+        <div class="board-wrap" id="boardWrap"></div>
+        <ul class="legend" id="legend"></ul>
+      </div>
+      <div class="panel" id="panel"></div>
+    </div>
+  </section>
+</div>
+<div id="stage" hidden></div>
+<div id="rules" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="rulesTitle"></div>
+
+<script>
+const ORDER = ['object', 'action', 'world', 'person', 'random', 'nature'];
+const CAT = { object: 'Object', action: 'Action', world: 'World', person: 'Person', random: 'Random', nature: 'Nature', any: 'Any' };
+const HINT = {
+  object: 'Things you can touch or use', action: 'Things you do', world: 'Places, countries, landmarks',
+  person: 'Famous people, real or made up', random: 'Anything at all', nature: 'Animals, plants, weather, space',
+  any: 'Every card comes from a random category'
+};
+const TEAM_COLORS = ['#E5197D', '#0B93CF', '#5EA813', '#F2701C', '#6A3FD1', '#8A5A33'];
+const DEFAULT_NAMES = ['The Talkers', 'Word Nerds', 'Quick Lips', 'Clue Crew', 'Chatterboxes', 'Big Mouths'];
+const TURN_SECONDS = 30;
+const BOARD_SIZES = [[20, 'Short · 20'], [25, 'Medium · 25'], [30, 'Long · 30']];
+const SPIN_VALUES = [1, -2, 2, -1, 1, -2, 2, -1];
+const SPIN_MS = 3200;
+
+const WORDS = {
+  object: 'Toaster|Umbrella|Toothbrush|Ladder|Scissors|Pillow|Kettle|Hammer|Telescope|Backpack|Candle|Wallet|Sunglasses|Microwave|Keyboard|Helmet|Envelope|Trampoline|Calculator|Mirror|Saucepan|Padlock|Magnifying glass|Stapler|Wheelbarrow|Binoculars|Bicycle|Sofa|Hairdryer|Remote control|Teapot|Suitcase|Guitar|Piano|Violin|Compass|Thermometer|Chopsticks|Spatula|Doorbell|Fridge|Lamp|Crayon|Paintbrush|Skateboard|Tent|Bucket|Frying pan|Light bulb|Battery|Headphones|Trophy|Crown|Balloon|Kite|Anchor|Parachute|Sandal|Scarf|Glove|Necklace|Perfume|Sponge|Vacuum cleaner|Washing machine|Blender|Rolling pin|Whistle|Dice|Jigsaw puzzle|Wristwatch|Calendar|Passport|Fork|Toilet roll|Plaster|Hourglass|Pencil sharpener|Lawnmower|Coat hanger|Paperclip|Doormat|Ironing board|Tin opener|Postbox|Wheelchair|Microphone|Screwdriver|Lunchbox|Phone charger|Alarm clock|Apron|Armchair|Axe|Baby bottle|Bandage|Barbell|Baseball cap|Basket|Bathtub|Beanbag|Bed sheet|Bell|Belt|Bin bag|Blanket|Bookshelf|Boomerang|Bottle opener|Bow tie|Bowl|Bracelet|Briefcase|Broom|Bubble wrap|Bunk bed|Butter knife|Camera|Canoe|Car keys|Cardboard box|Carpet|Cash register|Ceiling fan|Chair|Chessboard|Chopping board|Clipboard|Clock|Coat|Coffee mug|Colander|Comb|Computer mouse|Cooker|Cork|Cot|Crutches|Cupboard|Curtains|Cushion|Deckchair|Desk|Dishwasher|Doll|Door handle|Drawer|Drill|Drum|Duvet|Dustpan|Earrings|Easel|Egg cup|Rubber|Fan|Feather duster|Fence|Fire extinguisher|Fishing rod|Flag|Flip-flops|Flowerpot|Football boots|Frisbee|Game controller|Garden hose|Glasses|Globe|Glue stick|Goggles|Golf club|Grater|Hairbrush|Hammock|Handbag|Harmonica|Hat|Headband|Highlighter|Hoodie|Ice skates|Jacket|Jar|Jeans|Jug|Key|Knife|Ladle|Lantern|Laptop|Lipstick|Magnet|Map|Marble|Mask|Mattress|Tape measure|Medal|Megaphone|Microscope|Mittens|Mop|Mug|Nail clippers|Napkin|Needle|Newspaper|Notebook|Oar|Oven glove|Paddle|Paint roller|Paper plane|Pen|Pencil|Pepper grinder|Photo frame|Piggy bank|Pillowcase|Pin|Pizza cutter|Plate|Plug|Pogo stick|Pram|Printer|Projector|Purse|Pyjamas|Radiator|Radio|Raincoat|Rake|Razor|Recorder|Ring|Rocking chair|Roller skates|Rope|Rubber duck|Ruler|Safety pin|Salt shaker|Sandpaper|Satellite dish|Saw|Scales|Scooter|Screw|Seatbelt|Sellotape|Shampoo|Shed|Shelf|Shield|Shoelace|Shopping trolley|Shovel|Sieve|Sink|Sledge|Sleeping bag|Slippers|Smoke alarm|Snorkel|Soap|Sock|Spoon|Steering wheel|Stethoscope|Stool|Straw|String|Sun cream|Surfboard|Sword|Table|Tablet|Tap|Tea towel|Teddy bear|Telephone|Television|Tennis racket|Thimble|Tie|Tissue|Toilet|Tongs|Toolbox|Torch|Towel|Tractor|Traffic cone|Trainers|Tray|Treasure chest|Tripod|Trumpet|T-shirt|Tweezers|Typewriter|Tyre|USB stick|Vase|Walking stick|Wardrobe|Watering can|Wellies|Whisk|Wig|Window|Windscreen wiper|Wok|Xylophone|Yo-yo|Zip|Bunsen burner|Cheese grater|Dartboard|Fridge magnet|Hot water bottle|Lunch tray|Pencil case|Plunger|Rolling suitcase|Snow globe|Stopwatch|Swiss army knife|Toothpaste|Trampoline mat|Walkie-talkie',
+  action: 'Juggling|Sneezing|Swimming|Whispering|Knitting|Skiing|Yawning|Baking|Hiccupping|Sleepwalking|Tiptoeing|Skydiving|Gardening|Ironing|Snoring|Winking|Surfing|Painting|Climbing|Dancing|Shouting|Sweeping|Tickling|Hugging|Clapping|Shivering|Sunbathing|Bowling|Fishing|Hitchhiking|Recycling|Texting|Wrestling|Rowing|Jogging|Kneeling|Shrugging|Giggling|Apologising|Proposing|Celebrating|Photographing|Babysitting|Camping|Sewing|Flossing|Blinking|Stretching|Dreaming|Cheating|Borrowing|Complaining|Sneaking|Bouncing|Digging|Folding|Gargling|Kicking|Marching|Nodding|Peeling|Queuing|Racing|Sliding|Stirring|Tasting|Voting|Waving|Yodelling|Zipping|Boxing|Crawling|Diving|Exploring|Skipping|Hiding|Shopping|Sledging|Whistling|Arguing|Daydreaming|Hoovering|Moonwalking|Parking|Snorkelling|Typing|Cartwheeling|Weightlifting|Abseiling|Acting|Applauding|Bargaining|Bathing|Beatboxing|Begging|Blushing|Bragging|Breakdancing|Breathing|Building|Burping|Calling|Canoeing|Carrying|Carving|Catching|Chasing|Cheering|Chewing|Chopping|Cleaning|Coughing|Counting|Crying|Cuddling|Curtsying|Cycling|Delivering|Doodling|Dribbling|Drinking|Driving|Drumming|Dusting|Eating|Escaping|Exercising|Falling|Fencing|Fighting|Floating|Flying|Forgetting|Frowning|Gaming|Gliding|Grinning|Growing|Grumbling|Guessing|Hammering|Hiking|Hopping|Humming|Hunting|Interviewing|Inventing|Jumping|Karate|Kissing|Knocking|Laughing|Leaping|Learning|Licking|Lifting|Limping|Listening|Losing|Melting|Mixing|Mopping|Mumbling|Napping|Negotiating|Opening|Ordering|Packing|Paddling|Panicking|Parachuting|Patting|Pausing|Pinching|Planting|Poking|Polishing|Posing|Pouring|Praying|Pretending|Printing|Pulling|Punching|Pushing|Reading|Relaxing|Repairing|Rescuing|Rolling|Running|Sailing|Saluting|Sawing|Scratching|Screaming|Scrubbing|Searching|Shaving|Showering|Singing|Sitting|Skating|Sketching|Skateboarding|Sleeping|Slipping|Smiling|Sniffing|Snowboarding|Spinning|Splashing|Spying|Squeezing|Squinting|Stamping|Staring|Stealing|Stomping|Studying|Sulking|Sweating|Swinging|Teaching|Throwing|Tidying|Training|Travelling|Trembling|Tripping|Tumbling|Unpacking|Vacuuming|Waiting|Walking|Weaving|Winning|Wishing|Writing|Yelling|Pointing|Biting|Cooking|Frying|Washing|Drawing|Colouring|Scrolling|Watering|Brushing|Combing|Panting|Drilling|Fixing|Wrapping|Unwrapping|Barking|Selling|Buying|Paying|Kneading|Milking',
+  world: 'Eiffel Tower|Australia|Mount Everest|Sahara Desert|Amazon River|London|Great Wall of China|Japan|Egypt|Niagara Falls|Venice|Antarctica|Statue of Liberty|Brazil|Big Ben|Paris|New York|Pyramids|Hollywood|Canada|India|Italy|Mexico|Grand Canyon|Taj Mahal|Dubai|Iceland|Las Vegas|Pacific Ocean|North Pole|Rome|Colosseum|Sydney Opera House|Ireland|Scotland|Wales|Spain|Greece|Germany|Russia|China|Africa|Hawaii|The Alps|Mediterranean Sea|Stonehenge|Tokyo|Kenya|Switzerland|Amsterdam|Mount Kilimanjaro|River Nile|Caribbean|Jamaica|Turkey|River Thames|Buckingham Palace|Times Square|Golden Gate Bridge|Leaning Tower of Pisa|Machu Picchu|Mount Fuji|Morocco|Pakistan|Nigeria|Argentina|Peru|Norway|Portugal|Manchester|Liverpool|Edinburgh|Barcelona|Istanbul|Atlantic Ocean|Mount Olympus|Bermuda Triangle|Loch Ness|Hong Kong|Singapore|Brighton|Cornwall|Madagascar|New Zealand|Panama Canal|South Pole|Cairo|Algeria|Austria|Bangladesh|Belgium|Bolivia|Bulgaria|Cambodia|Chile|Colombia|Croatia|Cuba|Cyprus|Czech Republic|Denmark|Ethiopia|Fiji|Finland|Ghana|Hungary|Indonesia|Iran|Iraq|Israel|Jordan|Kuwait|Lebanon|Libya|Malaysia|Malta|Mongolia|Nepal|Netherlands|North Korea|Oman|Philippines|Poland|Qatar|Romania|Saudi Arabia|Senegal|Somalia|South Africa|South Korea|Sri Lanka|Sudan|Sweden|Syria|Taiwan|Tanzania|Thailand|Tunisia|Uganda|Ukraine|Uruguay|Venezuela|Vietnam|Yemen|Zimbabwe|Athens|Bangkok|Beijing|Berlin|Birmingham|Boston|Brussels|Budapest|Buenos Aires|Cape Town|Cardiff|Chicago|Copenhagen|Delhi|Dublin|Florence|Geneva|Glasgow|Havana|Helsinki|Jerusalem|Lagos|Leeds|Lisbon|Los Angeles|Madrid|Marrakech|Mecca|Miami|Milan|Moscow|Mumbai|Munich|Nairobi|Naples|Oslo|Oxford|Cambridge|Prague|Rio de Janeiro|San Francisco|Seoul|Stockholm|Tripoli|Benghazi|Toronto|Vancouver|Vienna|Warsaw|Washington DC|York|Zurich|Doha|Abu Dhabi|Riyadh|Casablanca|Kyoto|Shanghai|Bali|Maldives|Seychelles|Sicily|Crete|Tenerife|Ibiza|Majorca|Isle of Wight|Lake District|Snowdon|Ben Nevis|Disneyland|Mount Rushmore|White House|Kremlin|Acropolis|Petra|Angkor Wat|Christ the Redeemer|Burj Khalifa|Tower Bridge|London Eye|Tower of London|Edinburgh Castle|Windsor Castle|Hadrian\'s Wall|Sagrada Familia|Vatican City|Sistine Chapel|Louvre|Notre-Dame|Arc de Triomphe|Brandenburg Gate|Berlin Wall|Red Square|Forbidden City|Great Barrier Reef|Victoria Falls|Dead Sea|Red Sea|Black Sea|Indian Ocean|Arctic Ocean|Suez Canal|Gobi Desert|Himalayas|Andes|Rocky Mountains|Mississippi River|Danube|Yellowstone|Central Park|Wall Street|Silicon Valley|Route 66|Galapagos Islands|Easter Island|Greenland|Siberia|Scandinavia|Middle East|Europe|Asia|South America|North America|Wembley Stadium|Old Trafford|Anfield|Heathrow Airport|Channel Tunnel|English Channel|Mont Blanc|Matterhorn|Table Mountain|Uluru|Bora Bora|Copacabana|Alcatraz|Pentagon|Leptis Magna|Sabratha|Ghadames|Atlas Mountains|Lake Victoria|Mount Etna|Pompeii|Chernobyl|Hollywood Sign|Bahamas|Cotswolds',
+  person: 'Albert Einstein|William Shakespeare|Harry Potter|Santa Claus|Cristiano Ronaldo|Lionel Messi|Queen Elizabeth II|Michael Jackson|Taylor Swift|Spider-Man|Batman|Superman|Mickey Mouse|Isaac Newton|Leonardo da Vinci|Barack Obama|Nelson Mandela|Usain Bolt|Muhammad Ali|Elvis Presley|Charlie Chaplin|Cinderella|Snow White|Sherlock Holmes|James Bond|Shrek|Homer Simpson|SpongeBob|Mr Bean|Pinocchio|Peter Pan|Robin Hood|King Arthur|Cleopatra|Napoleon|Christopher Columbus|Neil Armstrong|Marie Curie|Charles Darwin|Mozart|Beethoven|Pablo Picasso|Vincent van Gogh|Walt Disney|Steve Jobs|Bill Gates|Mo Salah|David Beckham|Serena Williams|Lewis Hamilton|Oprah Winfrey|Beyoncé|Adele|Ed Sheeran|Darth Vader|Yoda|Super Mario|Sonic the Hedgehog|Pikachu|Elsa|Simba|Winnie the Pooh|Paddington Bear|Gandalf|Hermione Granger|Willy Wonka|Tarzan|Aladdin|Hercules|Tooth Fairy|Easter Bunny|Dracula|Frankenstein|Little Red Riding Hood|Wonder Woman|Iron Man|The Hulk|Captain America|The Joker|Abraham Lincoln|Martin Luther King|Mahatma Gandhi|Winston Churchill|Florence Nightingale|Roald Dahl|Ronald McDonald|Bob the Builder|Peppa Pig|Scooby-Doo|Mary Poppins|Agatha Christie|Alexander the Great|Amelia Earhart|Anne Frank|Ariana Grande|Arnold Schwarzenegger|Banksy|Bart Simpson|Beatrix Potter|Billie Eilish|Black Panther|Bruce Lee|Bugs Bunny|Buzz Lightyear|Captain Hook|Charles Dickens|Charlie Brown|Cookie Monster|Dennis the Menace|Dora the Explorer|Doctor Who|Donald Duck|Dumbledore|Dwayne Johnson|Elton John|Eminem|Emma Watson|Fred Flintstone|Freddie Mercury|Frodo Baggins|Galileo|Garfield|Genghis Khan|George Washington|Goldilocks|Gordon Ramsay|Hello Kitty|Henry VIII|Alfred Hitchcock|Indiana Jones|Jack Sparrow|Jackie Chan|Joan of Arc|John Lennon|Julius Caesar|Justin Bieber|Kermit the Frog|Kim Kardashian|King Kong|Kylian Mbappe|LeBron James|Lady Gaga|Lara Croft|Lightning McQueen|Luke Skywalker|Madonna|Marilyn Monroe|Michael Jordan|Michelangelo|Miss Piggy|Moana|Mother Teresa|Mulan|Neymar|Nemo|Olaf|Optimus Prime|Paul McCartney|Pele|Peter Rabbit|Pocahontas|Popeye|Postman Pat|Prince Harry|Princess Diana|Queen Victoria|Rapunzel|Rihanna|Roger Federer|Rowan Atkinson|Rudolph|Scrooge|Shakira|Sleeping Beauty|Snoopy|Stephen Hawking|Steven Spielberg|Thor|Thomas the Tank Engine|Tiger Woods|Tinker Bell|Tom Cruise|Tutankhamun|Wednesday Addams|Will Smith|Wolverine|Woody|Zinedine Zidane|Zeus|Poseidon|Medusa|Merlin|The Grinch|Mowgli|Baloo|Stitch|Patrick Star|Humpty Dumpty|Rumpelstiltskin|Pac-Man|Harry Styles|Dua Lipa|Drake|Bruno Mars|Stormzy|Erling Haaland|Harry Kane|Wayne Rooney|Marcus Rashford|Mike Tyson|Venus Williams|Simone Biles|Mo Farah|Andy Murray|Novak Djokovic|Rafael Nadal|Diego Maradona|Thomas Edison|Nikola Tesla|Alexander Graham Bell|Elon Musk|Mark Zuckerberg|Jeff Bezos|Captain Cook|Marco Polo|Ibn Battuta|Saladin|Omar Mukhtar|Rosa Parks|Malala|Greta Thunberg|David Attenborough|Bob Marley|Frida Kahlo|Mona Lisa|Big Bird|Elmo|Barbie|Catwoman|Aquaman|Deadpool|Captain Marvel|Doctor Strange|Groot|Puss in Boots|Ariel|Cruella de Vil|Maleficent|Fireman Sam|Noddy|Jay-Z|Kylie Minogue|Lewis Carroll|Alice in Wonderland|Mad Hatter|Cheshire Cat|Dorothy|Wicked Witch|Tin Man|Pied Piper|Little Mermaid|Ugly Duckling|Three Little Pigs|Big Bad Wolf|Gingerbread Man|Hansel and Gretel|Sinbad|Ali Baba|Lord Voldemort|Ron Weasley|Hagrid',
+  random: 'Birthday party|Homework|Monday|Chocolate|Pizza|Christmas|Hide and seek|Traffic jam|Selfie|Wi-Fi|Password|Football|Olympics|Wedding|Holiday|Sandcastle|Rollercoaster|Popcorn|Ice cream|Sushi|Pancake|Spaghetti|Sandwich|School|Hospital|Library|Museum|Cinema|Zoo|Circus|Magician|Pirate|Ninja|Astronaut|Dinosaur|Ghost|Zombie|Vampire|Dragon|Unicorn|Mermaid|Treasure|Superhero|Emoji|Video game|Fireworks|Halloween|Valentine\'s Day|New Year|Snowman|Sleepover|Picnic|Barbecue|Breakfast|Gravity|Electricity|Internet|Alphabet|Money|Jealousy|Happiness|Nightmare|Gossip|Karaoke|Recipe|Yoga|Marathon|Penalty|Referee|Red card|Checkmate|Lottery|Doctor|Firefighter|Teacher|Police officer|Robot|Alien|Bedtime story|Fairy tale|Fancy dress|Detention|Lunch break|Shopping list|Nap|Tickets|Jokes|Hiccups|Surprise party|Treasure map|Burger|Chips|Hot dog|Doughnut|Cupcake|Croissant|Lasagne|Curry|Kebab|Couscous|Falafel|Hummus|Noodles|Omelette|Porridge|Cereal|Toast|Jam|Honey|Cheese|Yoghurt|Milkshake|Smoothie|Lemonade|Hot chocolate|Tea|Coffee|Biscuit|Brownie|Cheesecake|Trifle|Jelly|Custard|Waffle|Taco|Burrito|Nachos|Dumplings|Fish and chips|Roast dinner|Sausage roll|Baked beans|Boiled egg|Fried rice|Soup|Salad|Strawberry|Banana|Pineapple|Apple pie|Candy floss|Lollipop|Marshmallow|Bubble gum|Toffee|Crisps|Pilot|Chef|Nurse|Dentist|Plumber|Electrician|Builder|Farmer|Vet|Lawyer|Judge|Scientist|Journalist|Postman|Hairdresser|Butcher|Baker|Librarian|Lifeguard|Mechanic|Taxi driver|Bus driver|Soldier|Spy|Detective|Footballer|Clown|DJ|Photographer|Waiter|Cleaner|Architect|Engineer|Programmer|Zookeeper|Shopkeeper|Pharmacist|Tour guide|Graduation|Job interview|Exam|Report card|Sports day|School trip|Car boot sale|Camping trip|Road trip|Baby shower|Eid|Ramadan|Diwali|Easter|Bonfire Night|Mother\'s Day|Father\'s Day|April Fools|Black Friday|World Cup|Champions League|Super Bowl|Wimbledon|Tour de France|Eurovision|Oscars|Concert|Festival|Carnival|Parade|Talent show|Quiz|Crossword|Sudoku|Monopoly|Scrabble|Tetris|Minecraft|Fortnite|Lego|TikTok|YouTube|Instagram|Netflix|Google|Podcast|Text message|Voicemail|Email|Hashtag|Meme|Vlog|Influencer|Time machine|Teleport|Invisibility|Superpower|Magic wand|Haunted house|Escape room|Bouncy castle|Water park|Theme park|Arcade|Bowling alley|Swimming pool|Gym|Playground|Supermarket|Petrol station|Car park|Airport|Train station|Lift|Escalator|Traffic lights|Zebra crossing|Roundabout|Motorway|Speeding ticket|Parking ticket|Flat tyre|Power cut|Fire drill|Birthday cake|Wish|Secret|Promise|Lie|Riddle|Rumour|Habit|Hobby|Weekend|Summer holiday|Snow day|Rainy day|Jet lag|Headache|Toothache|Sunburn|Common cold|Chickenpox|Vaccine|X-ray|Anniversary|Retirement|First day of school|Homesick|Boredom|Fear|Love|Anger|Luck|Friendship|Peace|Diet|Midnight|Snooze button|Low battery|Selfie stick|Lunchbox note|Group chat|Video call|Online shopping|Pocket money|Piggyback|Pillow fight|Tug of war|Musical chairs|Pass the parcel|Rock paper scissors|Thumb war|Hot potato|Simon says|Tag|Truth or dare|Charades|Treasure hunt|Wedding cake|Gold medal|Penalty shootout|Extra time|Half time|Offside|Own goal|Hat-trick|Slam dunk|Home run|Knockout|Photo finish',
+  nature: 'Elephant|Sunflower|Volcano|Rainbow|Octopus|Tornado|Penguin|Cactus|Waterfall|Butterfly|Giraffe|Mushroom|Thunder|Earthquake|Oak tree|Dolphin|Kangaroo|Snowflake|Hedgehog|Jellyfish|Eagle|Crocodile|Glacier|Lightning|Hurricane|Coral reef|Rose|Daisy|Owl|Bee|Spider|Shark|Whale|Lion|Tiger|Zebra|Panda|Koala|Gorilla|Flamingo|Peacock|Parrot|Snail|Worm|Frog|Tortoise|Rabbit|Squirrel|Fox|Wolf|Polar bear|Deer|Camel|Horse|Cow|Sheep|Pig|Chicken|Duck|Swan|Ant|Ladybird|Caterpillar|Seaweed|Iceberg|Cloud|Fog|Sunrise|Moon|Star|Comet|Pebble|Sand dune|River|Island|Cave|Forest|Jungle|Puddle|Acorn|Pine cone|Tulip|Bamboo|Coconut|Hailstone|Bat|Hamster|Goldfish|Mosquito|Seagull|Bluebell|Nettle|Sunset|Alligator|Anteater|Armadillo|Badger|Beaver|Bison|Buffalo|Cheetah|Chimpanzee|Chipmunk|Cobra|Crab|Crow|Cuckoo|Dragonfly|Donkey|Eel|Falcon|Ferret|Firefly|Gecko|Gerbil|Goat|Goose|Grasshopper|Guinea pig|Hare|Hippo|Hornet|Hummingbird|Hyena|Iguana|Jaguar|Kingfisher|Kiwi bird|Lamb|Leopard|Lizard|Llama|Lobster|Magpie|Meerkat|Mole|Moose|Moth|Mouse|Ostrich|Otter|Oyster|Panther|Pelican|Pigeon|Piranha|Platypus|Porcupine|Puffin|Puppy|Kitten|Python|Raccoon|Rat|Raven|Reindeer|Rhino|Robin|Salmon|Scorpion|Seahorse|Seal|Skunk|Sloth|Slug|Sparrow|Squid|Starfish|Stingray|Stork|Swallow|Toad|Toucan|Turtle|Vulture|Walrus|Wasp|Woodpecker|Yak|Apple tree|Blossom|Buttercup|Cherry blossom|Clover|Conker|Daffodil|Dandelion|Fern|Grass|Hedge|Holly|Ivy|Lavender|Lily|Maple leaf|Moss|Orchid|Palm tree|Pumpkin|Poppy|Rainforest|Seed|Thistle|Venus flytrap|Weed|Willow tree|Blizzard|Breeze|Drizzle|Drought|Flood|Frost|Heatwave|Mist|Monsoon|Rain|Snow|Storm|Sunshine|Thunderstorm|Tsunami|Wind|Asteroid|Black hole|Constellation|Eclipse|Galaxy|Jupiter|Mars|Meteor|Milky Way|Neptune|Planet|Saturn|Shooting star|Sun|Universe|Venus|Earth|Avalanche|Beach|Canyon|Cliff|Desert|Field|Hill|Lake|Meadow|Mountain|Ocean|Pond|Rock|Sea|Stream|Swamp|Tide|Valley|Wave|Crystal|Diamond|Fossil|Gold|Lava|Mud|Shell|Soil|Feather|Nest|Spider web|Beehive|Anthill|Cocoon|Tadpole|Frogspawn|Pine tree|Christmas tree|Bonsai tree|Rose bush|Strawberry plant|Sunflower seed|Coral|Plankton|Killer whale|Blue whale|Hammerhead shark|Clownfish|Pufferfish|Barn owl|Bald eagle|Golden retriever|Sheepdog|Poodle|Dalmatian|Chihuahua|Bulldog|Persian cat|Pony|Stallion'
+};
+Object.keys(WORDS).forEach(k => { WORDS[k] = WORDS[k].split('|'); });
+/* harder words: mixed into the decks and marked "Hard" on the card */
+const HARD_WORDS = {
+  object: 'Abacus|Accordion|Anvil|Astrolabe|Bagpipes|Barometer|Bellows|Blowtorch|Cassette tape|Catapult|Cauldron|Chandelier|Chisel|Corkscrew|Crossbow|Defibrillator|Funnel|Gramophone|Harpoon|Hearing aid|Kaleidoscope|Metronome|Monocle|Mortar and pestle|Periscope|Pipette|Pliers|Protractor|Quill|Sextant|Spirit level|Spinning wheel|Stencil|Sundial|Tambourine|Thermos flask|Trowel|Tuning fork|Ukulele|Wrench|Syringe|Lightning rod|Weather vane|Wind chime|Paperweight|Pendulum|Pulley|Hinge|Sewing machine|Loom|Lectern|Gavel|Handcuffs|Joystick|Stepladder|Hacksaw|Ice pick|Grappling hook',
+  action: 'Procrastinating|Eavesdropping|Meditating|Haggling|Gossiping|Rummaging|Fidgeting|Dawdling|Loitering|Reminiscing|Stargazing|Interrogating|Improvising|Exaggerating|Hesitating|Multitasking|Overthinking|Bartering|Bluffing|Brainstorming|Budgeting|Campaigning|Commuting|Composing|Embroidering|Fasting|Fundraising|Hypnotising|Kayaking|Marinating|Orienteering|Pickpocketing|Rehearsing|Sightseeing|Translating|Volunteering|Whittling|Zigzagging|Proofreading|Snowshoeing|Archery|Ventriloquism|Somersaulting|Tobogganing|Gatecrashing|Photobombing|Rebranding',
+  world: 'Azerbaijan|Kazakhstan|Uzbekistan|Kyrgyzstan|Liechtenstein|Luxembourg|Andorra|San Marino|Monaco|Montenegro|Bhutan|Burkina Faso|Djibouti|Eritrea|Mauritius|Mozambique|Namibia|Papua New Guinea|Suriname|Vanuatu|Tuvalu|Timbuktu|Kathmandu|Reykjavik|Ulaanbaatar|Ljubljana|Bratislava|Tbilisi|Yerevan|Baku|Valletta|Chichen Itza|Kalahari Desert|Atacama Desert|Lake Titicaca|Mariana Trench|Ring of Fire|Bay of Bengal|Strait of Gibraltar|Cape of Good Hope|Bosphorus|Tierra del Fuego|Patagonia|Transylvania|Mesopotamia|Persian Gulf|Caspian Sea|Ural Mountains|Neuschwanstein Castle|Terracotta Army|Mount Vesuvius|Giant\'s Causeway|Hagia Sophia|Alhambra|Golden Temple|Mount Sinai|Socotra|Zanzibar|Kamchatka',
+  person: 'Archimedes|Aristotle|Plato|Socrates|Pythagoras|Hippocrates|Confucius|Copernicus|Ada Lovelace|Alan Turing|Isambard Kingdom Brunel|Louis Pasteur|Alexander Fleming|Gregor Mendel|Johannes Gutenberg|Ferdinand Magellan|Vasco da Gama|Attila the Hun|Hannibal|Charlemagne|Boudicca|Rasputin|Karl Marx|Sigmund Freud|Leo Tolstoy|Jane Austen|Charlotte Bronte|Mark Twain|Edgar Allan Poe|Oscar Wilde|J R R Tolkien|George Orwell|Dante|Rembrandt|Claude Monet|Salvador Dali|Andy Warhol|Johann Sebastian Bach|Chopin|Tchaikovsky|Vivaldi|Coco Chanel|Harry Houdini|Nostradamus|Marie Antoinette|Catherine the Great|Peter the Great|Ivan the Terrible|Montezuma|Nefertiti|Ramses|Ibn Sina|Al-Khwarizmi|Ibn Khaldun|Odysseus|Achilles|Prometheus|Pandora|Icarus|Beowulf|Don Quixote|Robinson Crusoe|Gulliver|Dr Jekyll|Captain Nemo|Moby Dick',
+  random: 'Inflation|Mortgage|Philosophy|Nostalgia|Irony|Sarcasm|Deja vu|Insomnia|Claustrophobia|Procrastination|Algorithm|Cryptocurrency|Artificial intelligence|Virtual reality|Evolution|Recession|Bankruptcy|Referendum|Census|Monarchy|Propaganda|Jury|Alibi|Verdict|Pension|Tax return|Overdraft|Warranty|Paradox|Metaphor|Palindrome|Acronym|Pun|Haiku|Sonnet|Limerick|Opera|Symphony|Encore|Cliffhanger|Plot twist|Spoiler|Sequel|Prequel|Biography|Autograph|Etiquette|Superstition|Karma|Destiny|Conscience|Ego|Placebo|Adrenaline|Allergy|Time zone|Leap year|Daylight saving|Infinity|Fraction|Percentage|Algebra|Geometry|Quarantine|Pandemic|Echo|Shadow|Reflection|Silence|Small talk|Peer pressure|Bucket list|Midlife crisis|Comfort zone|Red tape|Loophole|White lie|Fake news|Clickbait|Firewall|Spam',
+  nature: 'Photosynthesis|Pollination|Hibernation|Migration|Metamorphosis|Erosion|Evaporation|Condensation|Equinox|Solstice|Northern lights|Stalactite|Stalagmite|Geyser|Fjord|Delta|Estuary|Lagoon|Peninsula|Archipelago|Tundra|Savannah|Mangrove|Permafrost|Magma|Tectonic plates|Ozone layer|Greenhouse effect|Food chain|Ecosystem|Habitat|Predator|Nocturnal|Carnivore|Herbivore|Omnivore|Mammal|Reptile|Amphibian|Marsupial|Chameleon|Narwhal|Axolotl|Pangolin|Okapi|Aardvark|Capybara|Wombat|Komodo dragon|Manatee|Mongoose|Lemur|Tapir|Gazelle|Wildebeest|Albatross|Cormorant|Heron|Praying mantis|Centipede|Millipede|Tarantula|Barracuda|Sea anemone|Krill|Nebula|Supernova|Orbit|Light year|Solar system|Crater|Uranus|Mercury|Pluto|Asteroid belt|Big Bang|Baobab tree|Redwood tree|Eucalyptus|Pollen|Nectar|Tree sap|Tree bark|Thorn|Petal'
+};
+Object.keys(HARD_WORDS).forEach(k => { HARD_WORDS[k] = HARD_WORDS[k].split('|'); });
+/* word modes. Each draws mostly from its own level, with easier words mixed in so it never gets too tough:
+   Normal: everyday words, plus a well-known hard one about 1 card in 12 (marked Hard).
+   Hard: harder words, 1 card in 4 is an everyday word. Hardest: the toughest, 1 in 4 from Hard.
+   Action words are always a single word. */
+const HARD_MORE = {
+  object: 'Barcode scanner|Carburettor|Chainsaw|Crowbar|Cufflinks|Dehumidifier|Drawbridge|Dreamcatcher|Egg timer|Fountain pen|Fuse box|Gas mask|Glockenspiel|Gyroscope|Hard hat|Hole punch|Incubator|Jackhammer|Jukebox|Lava lamp|Lawn sprinkler|Mannequin|Microchip|Mousetrap|Music stand|Nutcracker|Oil lamp|Dummy|Parasol|Pickaxe|Pinball machine|Pitchfork|Plimsolls|Pocket watch|Pressure cooker|Punchbag|Quiver|Router|Scarecrow|Scuba tank|Seesaw|Shoehorn|Slingshot|Soldering iron|Spinning top|Stilts|Tape dispenser|Tea strainer|Thermostat|Toast rack|Treadmill|Turntable|Vending machine|Welding mask|Wheelie bin|Windbreak|Cable tie',
+  action: 'Accelerating|Bickering|Bowing|Chanting|Deleting|Diagnosing|Dodging|Downloading|Encouraging|Erupting|Fainting|Flinching|Frolicking|Glaring|Grovelling|Heckling|Hoarding|Interrupting|Jaywalking|Lurking|Mimicking|Nagging|Overtaking|Pondering|Pouting|Quarrelling|Rationing|Reversing|Scavenging|Shushing|Simmering|Slouching|Smuggling|Snooping|Stammering|Strolling|Stumbling|Swerving|Tinkering|Trespassing|Unscrewing|Uploading|Wading|Waddling|Wheezing|Wriggling|Busking|Paragliding|Parkour|Caving|Beekeeping|Pottery|Origami|Shoplifting|Lipsyncing|Plaiting|Paddleboarding',
+  world: 'Accra|Addis Ababa|Amman|Ankara|Auckland|Baghdad|Belfast|Belgrade|Bern|Bogota|Bucharest|Canberra|Caracas|Damascus|Dhaka|Dubrovnik|Hanoi|Islamabad|Jakarta|Kabul|Kampala|Khartoum|Kyiv|Kuala Lumpur|Lima|Manila|Montreal|Muscat|New Orleans|Ottawa|Perth|Quebec|Quito|Rabat|Riga|Salzburg|Santiago|Sofia|Taipei|Tallinn|Tehran|Tunis|Vilnius|Wellington|Zagreb|Lake Como|Loch Lomond|Isle of Skye|Jersey|Gibraltar|Bermuda|Tasmania|Borneo|Okinawa|Hokkaido|Bavaria|Tuscany|Provence|Normandy|Sardinia|Corsica|Algarve|Andalusia|Catalonia|Yukon|Alaska|Texas|California|Florida|Brooklyn|Manhattan',
+  person: 'Al Capone|Amy Winehouse|Anne Boleyn|Aretha Franklin|Audrey Hepburn|Bill Clinton|Bob Dylan|Boris Johnson|Brad Pitt|Buzz Aldrin|Che Guevara|Clint Eastwood|Johan Cruyff|Dalai Lama|David Bowie|Dolly Parton|Donald Trump|Elizabeth I|Emmeline Pankhurst|Enid Blyton|Ernest Hemingway|Fidel Castro|Frank Sinatra|George Michael|Gary Lineker|Guy Fawkes|Harriet Tubman|Helen Keller|Henry Ford|Hugh Grant|Jamie Oliver|Jane Goodall|Jennifer Aniston|Jim Carrey|Joe Biden|John F Kennedy|Johnny Depp|Keanu Reeves|Kate Middleton|King Charles|Kofi Annan|Leonardo DiCaprio|Louis Armstrong|Margaret Thatcher|Meghan Markle|Meryl Streep|Michelle Obama|Morgan Freeman|Oliver Cromwell|Ozzy Osbourne|Prince William|Quentin Tarantino|Ringo Starr|Robbie Williams|Ronaldinho|Sean Connery|Simon Cowell|Sylvester Stallone|Thierry Henry|Tom Hanks|Tony Blair|Vladimir Putin|Whitney Houston|William the Conqueror|Zlatan Ibrahimovic|Steven Gerrard|Riyad Mahrez|Sadio Mane|Didier Drogba|Jose Mourinho|Pep Guardiola|Jurgen Klopp|Alex Ferguson|Arsene Wenger|J K Rowling|Stan Lee|Hans Christian Andersen|Rudyard Kipling|Umm Kulthum|Amr Diab',
+  random: 'Applause|Bargain|Bribe|Budget|Ceasefire|Charity|Coincidence|Compromise|Confession|Curfew|Deadline|Debt|Dilemma|Disguise|Donation|Election|Excuse|Fortune|Grudge|Guilt|Heritage|Hint|Immigration|Interest rate|Invoice|Landlord|Legacy|Manifesto|Mascot|Mystery|Nickname|Obsession|Opinion|Parliament|Passport control|Patience|Pilgrimage|Poverty|Prejudice|Privacy|Protest|Puzzle|Receipt|Refund|Rehearsal|Reputation|Revenge|Rivalry|Salary|Sanctuary|Scandal|Scholarship|Sponsor|Stereotype|Strike|Subscription|Suspense|Taboo|Talent|Tradition|Treaty|Truce|Tuition|Uniform|Vacancy|Veto|Wisdom|Yearbook',
+  nature: 'Algae|Antelope|Beetle|Bonobo|Budgie|Bumblebee|Catfish|Cicada|Cockatoo|Cockroach|Condor|Cougar|Coyote|Dingo|Dormouse|Earwig|Emu|Flea|Gibbon|Hermit crab|Hyacinth|Kestrel|Koi carp|Lynx|Macaw|Mandrill|Marmot|Mayfly|Mink|Nightingale|Orangutan|Osprey|Partridge|Peregrine falcon|Pheasant|Prawn|Quail|Red squirrel|Rattlesnake|Sardine|Sea lion|Shrew|Snow leopard|Stag beetle|Swordfish|Trout|Tuna|Viper|Vole|Warthog|Weasel|Wren|Aloe vera|Birch tree|Chestnut tree|Chrysanthemum|Cotton plant|Foxglove|Geranium|Heather|Honeysuckle|Lotus|Magnolia|Marigold|Mistletoe|Olive tree|Pansy|Rhubarb|Sycamore|Tumbleweed|Violet|Water lily|Wheat|Dew|Gale|Hailstorm|Humidity|Lunar eclipse|Rainfall|Sleet|Smog|Thunderclap|Twilight|Whirlpool|Wildfire|Sandstorm'
+};
+const HARDEST_WORDS = {
+  object: 'Theodolite|Seismograph|Odometer|Altimeter|Anemometer|Hygrometer|Oscilloscope|Centrifuge|Carabiner|Cravat|Cummerbund|Ottoman|Chaise longue|Credenza|Armoire|Dumbwaiter|Trebuchet|Portcullis|Gauntlet|Chainmail|Sarcophagus|Sitar|Didgeridoo|Bassoon|Oboe|Harpsichord|Cello|Lute|Banjo|Castanets|Cymbals|Tuba|Bifocals|Scalpel|Forceps|Tourniquet|Mandoline slicer|Ramekin|Cafetiere|Samovar|Tagine|Tiara|Sceptre|Blood pressure cuff|Spinning jenny|Ear trumpet|Diving bell',
+  action: 'Hyperventilating|Philosophising|Plagiarising|Meandering|Ruminating|Sauntering|Scrutinising|Fermenting|Pickling|Embalming|Taxidermy|Calligraphy|Upholstering|Glassblowing|Blacksmithing|Falconry|Curling|Hurdling|Moonlighting|Freewheeling|Mediating|Composting|Sanding|Plastering|Grouting|Wallpapering|Birdwatching|Kitesurfing|Windsurfing|Spelunking|Geocaching|Showjumping|Dressage|Sculpting|Woodturning|Lipreading|Codebreaking',
+  world: 'Ouagadougou|Antananarivo|Nouakchott|Ashgabat|Bishkek|Dushanbe|Thimphu|Vientiane|Phnom Penh|Port Moresby|Kiribati|Nauru|Palau|Comoros|Lesotho|Eswatini|Malawi|Burundi|Rwanda|Gabon|Togo|Benin|Chad|Niger|Mali|Mauritania|Guinea-Bissau|Sierra Leone|Liberia|Cape Verde|Belize|Honduras|Nicaragua|Guatemala|El Salvador|Paraguay|Guyana|Trinidad and Tobago|Barbados|Moldova|Belarus|Estonia|Latvia|Lithuania|Slovakia|Slovenia|North Macedonia|Albania|Kosovo|Brunei|East Timor|Krakatoa|Mount Elbrus|Aconcagua|Annapurna|K2|Lake Baikal|Okavango Delta|Ngorongoro Crater|Serengeti|Great Rift Valley|Bering Strait|Strait of Hormuz',
+  person: 'Hammurabi|Cicero|Herodotus|Euclid|Ptolemy|Ibn Rushd|Al-Idrisi|Ibn al-Haytham|Rumi|Omar Khayyam|Suleiman the Magnificent|Mehmed the Conqueror|Kublai Khan|Tamerlane|Akbar the Great|Ashoka|Cyrus the Great|Xerxes|Leonidas|Pericles|Spartacus|Nero|Caligula|Constantine|Max Planck|Niels Bohr|Werner Heisenberg|Erwin Schrodinger|Richard Feynman|Enrico Fermi|Rosalind Franklin|Dmitri Mendeleev|Michael Faraday|James Watt|Antoine Lavoisier|Carl Linnaeus|Edward Jenner|Joseph Lister|Mary Seacole|Grace Hopper|Tim Berners-Lee|Franz Kafka|Fyodor Dostoevsky|Victor Hugo|Goethe|Cervantes|Geoffrey Chaucer|Virginia Woolf|Sylvia Plath|Emily Dickinson|Walt Whitman|John Keats|Lord Byron|Mary Shelley|William Wordsworth|Caravaggio|Botticelli|Raphael|Donatello|Vermeer|Francisco Goya|J M W Turner|Gustav Klimt|Edvard Munch|Henri Matisse|Paul Cezanne|Wassily Kandinsky|Jackson Pollock|Claude Debussy|George Frideric Handel|Joseph Haydn|Franz Schubert|Richard Wagner|Igor Stravinsky|Giacomo Puccini|Giuseppe Verdi',
+  random: 'Bureaucracy|Capitalism|Socialism|Communism|Feminism|Globalisation|Gentrification|Hypothesis|Philanthropy|Hypocrisy|Nepotism|Plagiarism|Serendipity|Schadenfreude|Euphemism|Onomatopoeia|Alliteration|Hyperbole|Oxymoron|Satire|Allegory|Renaissance|Industrial Revolution|Cold War|Enlightenment|Reformation|Feudalism|Magna Carta|Constitution|Filibuster|Impeachment|Coup|Diplomacy|Sovereignty|Ambassador|Embassy|Asylum|Inheritance|Insurance|Stock market|Dividend|Supply and demand|Existentialism|Utopia|Dystopia|Zeitgeist|Entrepreneur|Encryption|Bandwidth|Cloud computing|Machine learning|Quantum physics|Relativity|Entropy|Momentum|Friction|Inertia|Velocity|Probability|Statistics|Calculus|Prime number|Square root|Pythagoras\' theorem',
+  nature: 'Bioluminescence|Chlorophyll|Symbiosis|Parasite|Camouflage|Echolocation|Germination|Decomposition|Osmosis|DNA|Bacteria|Virus|Fungus|Lichen|Continental drift|Pangaea|Sediment|Limestone|Granite|Quartz|Obsidian|Amber|Sinkhole|Oxbow lake|Water cycle|Jet stream|Trade winds|Cumulus cloud|Neutron star|Red giant|White dwarf|Quasar|Pulsar|Dark matter|Wormhole|Exoplanet|Andromeda galaxy|Orion\'s Belt|Halley\'s Comet|Kuiper belt|Dodo|Mammoth|Sabre-toothed tiger|Pterodactyl|Tyrannosaurus rex|Triceratops|Velociraptor|Stegosaurus|Brachiosaurus|Megalodon|Tardigrade|Blobfish|Anglerfish|Mantis shrimp|Cuttlefish|Nautilus|Aye-aye|Tasmanian devil|Quokka|Dugong|Cassowary|Shoebill|Fennec fox|Jerboa|Addax'
+};
+const MODES = { normal: 'Normal', hard: 'Hard', hardest: 'Hardest', arabic: 'عربي Arabic' };
+const MODE_HINT = { normal: 'Everyday words, a hard one now and then', hard: 'Harder words, mixed with some everyday ones', hardest: 'The toughest words, with some hard ones mixed in', arabic: 'Arabic words: Libyan and Arab places, food, people and everyday things' };
+/* hard words that are too obscure to drop into a Normal game (they still come up in Hard) */
+const TOO_TOUGH = {
+  object: 'Astrolabe|Sextant|Pipette|Bellows|Lectern|Loom|Gramophone|Monocle|Spirit level|Tuning fork|Defibrillator|Metronome',
+  action: 'Dawdling|Loitering|Reminiscing|Bartering|Whittling|Orienteering|Ventriloquism|Rebranding|Embroidering|Marinating|Snowshoeing|Tobogganing|Gatecrashing|Interrogating|Hesitating',
+  world: 'Kyrgyzstan|Uzbekistan|Burkina Faso|Djibouti|Eritrea|Suriname|Vanuatu|Tuvalu|Ulaanbaatar|Ljubljana|Bratislava|Tbilisi|Yerevan|Baku|Valletta|Socotra|Kamchatka|Bosphorus|Tierra del Fuego|Ural Mountains|Mesopotamia|Ring of Fire|Bay of Bengal|Atacama Desert|Kalahari Desert|Neuschwanstein Castle|Lake Titicaca|Chichen Itza|Mount Sinai',
+  person: 'Isambard Kingdom Brunel|Gregor Mendel|Boudicca|Charlemagne|Ibn Khaldun|Al-Khwarizmi|Montezuma|Captain Nemo|Beowulf|Hippocrates|Copernicus|Johannes Gutenberg|Ferdinand Magellan|Vasco da Gama|Leo Tolstoy|Charlotte Bronte|Edgar Allan Poe|Rembrandt|Claude Monet|Johann Sebastian Bach|Chopin|Tchaikovsky|Vivaldi|Ivan the Terrible|Peter the Great|Catherine the Great|Nefertiti|Ramses|Ibn Sina|Rasputin|Gulliver|Dr Jekyll|Don Quixote|Karl Marx|Confucius|Alexander Fleming|Louis Pasteur|Ada Lovelace',
+  random: 'Census|Referendum|Overdraft|Limerick|Sonnet|Haiku|Palindrome|Paradox|Metaphor|Warranty|Pension|Red tape|Loophole|Propaganda|Recession|Etiquette|Conscience|Placebo|Algorithm',
+  nature: 'Okapi|Tapir|Cormorant|Krill|Estuary|Delta|Permafrost|Mangrove|Tundra|Equinox|Solstice|Condensation|Stalagmite|Stalactite|Barracuda|Sea anemone|Nebula|Supernova|Eucalyptus|Baobab tree|Redwood tree|Tree sap|Tectonic plates|Ozone layer|Greenhouse effect|Marsupial|Amphibian'
+};
+/* Arabic pack: Libyan and Arab places, food, people and everyday things, in Arabic */
+const ARABIC_WORDS = {
+  object: 'ثلاجة|غسالة|مكنسة|مروحة|مكيف|تلفزيون|ريموت|هاتف|شاحن|سماعة|ساعة|منبه|نظارة|مظلة|حقيبة|محفظة|مفتاح|قفل|باب|نافذة|كرسي|طاولة|سرير|وسادة|بطانية|سجادة|ستارة|مرآة|مشط|فرشاة أسنان|معجون أسنان|صابون|منشفة|شامبو|مقص|إبرة|خيط|زر|قلم|ممحاة|مسطرة|دفتر|كتاب|حاسوب|لوحة مفاتيح|فأرة الحاسوب|طابعة|كاميرا|مصباح|شمعة|ولاعة|كبريت|إبريق|فنجان|كأس|ملعقة|شوكة|سكين|صحن|قدر|مقلاة|فرن|ميكروويف|خلاط|محمصة خبز|غلاية|سلة|كيس|صندوق|سلم|مطرقة|مسمار|مفك|منشار|دلو|خرطوم|دراجة|سيارة|حافلة|طائرة|قطار|سفينة|قارب|دراجة نارية|خوذة|حذاء|جوارب|قميص|بنطلون|فستان|قبعة|شال|جاكيت|حزام|خاتم|عقد|سوار|عطر|مكواة|مجفف شعر|ميزان|ميزان حرارة|ضمادة|كرة|دمية|طائرة ورقية|بالون|أرجوحة|مزهرية|لوحة فنية|بوصلة|منظار|خريطة|علم|جرس|صافرة|طبلة|عود|كمان|بيانو|دف|مسبحة|فانوس|خيمة|كرسي متحرك|مصعد|درج|بطارية|مسدس ماء|نرد|شطرنج|مبخرة',
+  action: 'سباحة|ركض|قفز|مشي|نوم|أكل|شرب|طبخ|غسيل|كنس|كوي|رسم|كتابة|قراءة|غناء|رقص|ضحك|بكاء|صراخ|همس|تصفيق|عطس|سعال|تثاؤب|شخير|تصفير|تسلق|تزلج|صيد|خياطة|زراعة|حفر|تسوق|قيادة|طيران|غوص|تجديف|ملاكمة|مصارعة|رماية|سباق|اختباء|مطاردة|عناق|مصافحة|تلويح|غمز|عبوس|تفكير|نسيان|عد|رمي|ركل|تنظيف|ترتيب|تغليف|حلاقة|استحمام|تمشيط|ترحيب|وداع|اعتذار|كذب|غش|سرقة|هروب|انتظار|استيقاظ|تمثيل|تصوير|بحث|سفر|تخييم|شواء|عجن|تقشير|تقطيع|قلي|تذوق|مضغ|عض|شم|تجسس|صيام|عزف|تشجيع|احتفال|زغاريد|مزاح|دغدغة|تدليك|تأرجح|دحرجة|زحف|تعثر|سقوط|انزلاق|بناء|إصلاح|دهان|ترجمة|تدريس|حمل|دفع|سحب|عصر|نفخ|تنفس|تعرق|ارتجاف|تقليد|مساومة|نميمة|ثرثرة|تأخر|استعجال|تمدد|تفاوض|تصويت|تطريز|حياكة|تحميص|تسخين|تبريد|تعليق|إطعام|حراسة|تسلل|تهديف|تمرير|تحكيم|توصيل|تسجيل|تحديق|تصفح|برمجة|تجميل|تزيين',
+  world: 'ليبيا|طرابلس|بنغازي|مصراتة|سبها|درنة|طبرق|الزاوية|غدامس|لبدة الكبرى|شحات|الجبل الأخضر|غريان|زليتن|البيضاء|سرت|الكفرة|غات|مصر|القاهرة|الإسكندرية|الأقصر|الأهرامات|أبو الهول|نهر النيل|قناة السويس|تونس|جربة|القيروان|الجزائر|وهران|المغرب|مراكش|الدار البيضاء|فاس|طنجة|موريتانيا|السودان|الخرطوم|السعودية|الرياض|جدة|الإمارات|دبي|أبوظبي|برج خليفة|قطر|الدوحة|الكويت|البحرين|سلطنة عمان|مسقط|اليمن|صنعاء|الأردن|عمّان|البتراء|البحر الميت|فلسطين|القدس|غزة|لبنان|بيروت|سوريا|دمشق|حلب|العراق|بغداد|البصرة|تركيا|إسطنبول|باكستان|الهند|تاج محل|الصين|سور الصين العظيم|اليابان|طوكيو|كوريا|روسيا|موسكو|فرنسا|باريس|برج إيفل|إيطاليا|روما|البندقية|إسبانيا|مدريد|برشلونة|الأندلس|غرناطة|قصر الحمراء|ألمانيا|برلين|بريطانيا|لندن|ساعة بيغ بن|هولندا|سويسرا|اليونان|أثينا|أمريكا|نيويورك|تمثال الحرية|هوليوود|لاس فيغاس|كندا|البرازيل|الأرجنتين|المكسيك|أستراليا|القطب الشمالي|القطب الجنوبي|الصحراء الكبرى|البحر المتوسط|المحيط الأطلسي|المحيط الهادئ|جبال الألب|جبل إفرست|غابات الأمازون|أفريقيا|أوروبا|آسيا|ماليزيا|إندونيسيا|جزر المالديف|نيجيريا|كينيا|جنوب أفريقيا|مالطا|قبرص|صقلية|تشاد|النيجر|البرتغال|بلجيكا|السويد',
+  person: 'محمد صلاح|عمر المختار|صلاح الدين الأيوبي|ابن بطوطة|هارون الرشيد|ابن سينا|الخوارزمي|ابن خلدون|المتنبي|عنترة بن شداد|أبو زيد الهلالي|طارق بن زياد|ابن الهيثم|ابن رشد|جحا|شهرزاد|شهريار|سندباد|علاء الدين|علي بابا|أم كلثوم|فيروز|عبد الحليم حافظ|محمد عبده|عمرو دياب|نانسي عجرم|كاظم الساهر|راغب علامة|إليسا|تامر حسني|محمد منير|عادل إمام|سعاد حسني|نجيب محفوظ|نزار قباني|محمود درويش|جبران خليل جبران|أحمد زويل|زها حديد|رياض محرز|حكيم زياش|زين الدين زيدان|أبو تريكة|ياسين بونو|طارق التائب|ميسي|كريستيانو رونالدو|نيمار|مبابي|محمد علي كلاي|مايكل جاكسون|أينشتاين|نيوتن|شكسبير|ليوناردو دافنشي|نابليون|كليوباترا|توت عنخ آمون|الإسكندر الأكبر|غاندي|نيلسون مانديلا|ستيف جوبز|بيل غيتس|إيلون ماسك|مارك زوكربيرغ|توم كروز|جاكي شان|بروس لي|مستر بين|شارلي شابلن|هاري بوتر|سبايدرمان|باتمان|سوبرمان|الرجل الحديدي|هالك|ميكي ماوس|توم وجيري|سبونج بوب|بينوكيو|سندريلا|سنو وايت|بابا نويل|شرلوك هولمز|جيمس بوند|طرزان|باباي|السنافر|كابتن ماجد|المحقق كونان|عدنان ولينا|بيكاتشو|ماريو|سونيك|الملكة إليزابيث|رامبو|دراكولا|روبن هود|الجوكر|فرانكنشتاين|ماوكلي|ريمي|سالي|غرندايزر|النمر الوردي',
+  random: 'رمضان|عيد|عرس|حنة|زفة|سحور|إفطار|فطور|غداء|عشاء|كسكسي|بازين|مبكبكة|عصيدة|شربة ليبية|عصبان|مقروض|سفنز|بسيسة|زميتة|طاجين|شاي|قهوة|شاي بالكاكاوية|كعك|بقلاوة|كنافة|بسبوسة|شاورما|فلافل|حمص|فول|ملوخية|كبسة|منسف|مندي|محشي|بيتزا|برغر|معكرونة|سلطة|خبز|تمر|عسل|زيت زيتون|حليب|جبن|بيض|شوكولاتة|آيس كريم|فشار|عصير|مدرسة|جامعة|مستشفى|مطار|سوق|ملعب|حديقة|مكتبة|متحف|سينما|سيرك|حديقة حيوان|مخبز|صيدلية|بنك|فندق|مطعم|مقهى|عيد ميلاد|حفلة|رحلة|نزهة|امتحان|واجب مدرسي|عطلة|كأس العالم|ضربة جزاء|بطاقة حمراء|هدف|كرة القدم|الأولمبياد|إنترنت|واي فاي|كلمة سر|سيلفي|يوتيوب|تيك توك|إنستغرام|واتساب|بريد إلكتروني|ألعاب فيديو|بلايستيشن|كهرباء|انقطاع الكهرباء|زحمة سير|إشارة مرور|بنزين|طابور|كابوس|سر|وعد|كذبة|مفاجأة|هدية|حظ|سعادة|غيرة|خوف|حب|صداقة|ملل|جوع|عطش|نعاس|صداع|زكام|دواء|طبيب|مهندس|معلم|شرطي|إطفائي|طيار|طباخ|خباز|حلاق|نجار|سباك|ميكانيكي|جندي|محامي|قاضي|ممرضة|صحفي|مذيع|مدرب|فلاح|راعي غنم|تاجر|سائق تاكسي|ساعي البريد|رائد فضاء|قرصان|نينجا|ساحر|شبح|غول|تنين|حورية البحر|ديناصور|روبوت|كائن فضائي|كنز|خريطة كنز|مصباح سحري|بساط الريح|مهرجان|حفل موسيقي|مسرح|دومينو|ورق اللعب|غميضة|نط الحبل|كرة السلة|تنس|عروس|عريس|جد|توأم|جيران|ضيوف|سيارة إسعاف|عيد الأم|الصيف|الشتاء|منتصف الليل|عطلة نهاية الأسبوع',
+  nature: 'أسد|نمر|فيل|زرافة|حمار وحشي|قرد|غوريلا|دب|ذئب|ثعلب|أرنب|سنجاب|فأر|قطة|كلب|حصان|حمار|جمل|بقرة|خروف|ماعز|دجاجة|ديك|بطة|حمامة|نسر|صقر|بومة|ببغاء|طاووس|نعامة|بطريق|دلفين|حوت|قرش|أخطبوط|سلحفاة|تمساح|ثعبان|سحلية|ضفدع|فراشة|نحلة|نملة|عنكبوت|عقرب|بعوضة|ذبابة|صرصور|حلزون|دودة|سمكة|سلطعون|قنديل البحر|نجم البحر|كنغر|باندا|كوالا|فهد|غزال|وحيد القرن|فرس النهر|خفاش|قنفذ|وردة|عباد الشمس|نخلة|شجرة زيتون|صبار|عشب|فطر|غابة|جبل|بركان|صحراء|واحة|كثبان رملية|بحر|نهر|بحيرة|شلال|كهف|جزيرة|شاطئ|موجة|مطر|ثلج|برق|رعد|عاصفة|إعصار|زلزال|قوس قزح|ضباب|رياح|القبلي|شمس|قمر|نجمة|كوكب|المريخ|زحل|نيزك|كسوف الشمس|هلال|سحابة|جليد|نار|دخان|رمل|طين|خريف|ربيع|شروق الشمس|غروب الشمس|ياسمين|تفاحة|برتقالة|بطيخ|عنب|رمان|تين|موز|ليمون|فراولة|جزر|بصل|طماطم|فلفل حار|زيتون'
+};
+const POOLS = { normal: WORDS, normalHard: {}, hard: {}, hardest: {}, arabic: {} };
+const MIX = { normal: ['normalHard', 1 / 12], hard: ['normal', 0.25], hardest: ['hard', 0.25], arabic: ['arabic', 0] };
+Object.keys(ARABIC_WORDS).forEach(k => { POOLS.arabic[k] = ARABIC_WORDS[k].split('|'); });
+Object.keys(HARD_MORE).forEach(k => {
+  const tough = new Set(TOO_TOUGH[k].split('|'));
+  POOLS.normalHard[k] = HARD_WORDS[k].filter(w => !tough.has(w));
+  POOLS.hard[k] = HARD_WORDS[k].concat(HARD_MORE[k].split('|'));
+  POOLS.hardest[k] = HARDEST_WORDS[k].split('|');
+});
+
+const NS = 'http://www.w3.org/2000/svg';
+const SAVE_KEY = 'spade-speak-game-v1';
+const DRAFT_KEY = 'spade-speak-draft-v1';
+const R1 = 192, R0 = 116;
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const f1 = n => n.toFixed(2);
+
+let S = null;          // live game state
+let draft = null;      // setup form state
+let saved = null;      // a saved game found on load
+let muted = false;
+let disp = {};         // token positions shown mid-animation
+let boardKey = '';
+
+/* ---------- storage ---------- */
+function store(key, val) { try { if (val == null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+function fetchStore(key) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+function save() { store(SAVE_KEY, S); }
+
+/* ---------- sound ---------- */
+let ac = null;
+function ensureAudio() {
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; } }
+  if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+}
+function tone(freq, dur, type = 'sine', vol = .18, when = 0) {
+  if (muted || !ac) return;
+  const t = ac.currentTime + when, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + .03);
+}
+const sfx = {
+  tick: () => tone(880, .07, 'square', .07),
+  ok: () => { tone(660, .1, 'triangle', .2); tone(990, .16, 'triangle', .2, .08); },
+  skip: () => tone(310, .14, 'triangle', .16),
+  foul: () => { tone(220, .12, 'square', .1); tone(180, .16, 'square', .1, .1); },
+  buzz: () => { tone(150, .75, 'sawtooth', .2); tone(156, .75, 'sawtooth', .16); },
+  step: () => tone(540, .05, 'sine', .09),
+  spinner: () => [523, 659, 784, 659].forEach((fq, i) => tone(fq, .12, 'triangle', .14, i * .09)),
+  flag: () => [700, 520, 700].forEach((fq, i) => tone(fq, .1, 'square', .09, i * .11)),
+  win: () => [523, 659, 784, 1047, 784, 1047].forEach((fq, i) => tone(fq, .22, 'triangle', .2, i * .12))
+};
+let wakeLock = null;
+function keepAwake() { try { navigator.wakeLock?.request('screen').then(l => { wakeLock = l; }).catch(() => {}); } catch (e) {} }
+
+/* ---------- board ---------- */
+function polar(r, deg) { const a = deg * Math.PI / 180; return [200 + r * Math.cos(a), 200 + r * Math.sin(a)]; }
+function buildSpaces(n) {
+  const sp = [];
+  for (let i = 0; i < n; i++) {
+    const inner = i > 0 && i < n - 1;
+    const spade = inner && i % 7 === 4;
+    sp.push({ cat: spade ? 'any' : ORDER[i % 6], spade, spin: inner && i > 1 && i % 7 === 1 });
+  }
+  return sp;
+}
+function spinBadge(r) {
+  return `<circle r="${r}" fill="#1E9B5A"/><path d="M0 0L0 ${-r}A${r} ${r} 0 0 1 ${r} 0ZM0 0L0 ${r}A${r} ${r} 0 0 1 ${-r} 0Z" fill="#D9363E"/><circle r="${r}" fill="none" stroke="#fff" stroke-width="1.2"/><circle r="${r * .22}" fill="#fff"/>`;
+}
+function boardSVG(spaces, withTokens) {
+  const n = spaces.length, step = 360 / n, fs = n <= 20 ? 9.6 : n <= 25 ? 9 : n <= 30 ? 8.6 : n <= 40 ? 7.6 : 6.8;
+  /* each board copy needs its own gradient id: a hidden copy can't paint the visible one */
+  const gid = withTokens ? 'anyFillGame' : 'anyFillHome';
+  let out = `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">${ORDER.map((c, k) => `<stop offset="${k / 5}" style="stop-color:var(--c-${c})"/>`).join('')}</linearGradient></defs>` + `<circle class="board-shadow" cx="200" cy="206" r="${R1 + 6}"/><circle class="plate" cx="200" cy="200" r="${R1 + 6}"/>`;
+  spaces.forEach((s, i) => {
+    const a0 = -90 + i * step, a1 = a0 + step, mid = a0 + step / 2, fin = i === n - 1;
+    const [x1, y1] = polar(R1, a0), [x2, y2] = polar(R1, a1), [x3, y3] = polar(R0, a1), [x4, y4] = polar(R0, a0);
+    const label = i === 0 ? 'Start' : fin ? 'Finish' : `Space ${i}`;
+    out += `<path class="seg ${fin ? 'seg-finish' : 'seg-' + s.cat}"${s.cat === 'any' && !fin ? ` fill="url(#${gid})"` : ''} d="M${f1(x1)} ${f1(y1)}A${R1} ${R1} 0 0 1 ${f1(x2)} ${f1(y2)}L${f1(x3)} ${f1(y3)}A${R0} ${R0} 0 0 0 ${f1(x4)} ${f1(y4)}Z"><title>${label} · ${fin ? 'final challenge' : CAT[s.cat]}${s.spade ? ' · spade' : ''}${s.spin ? ' · spinner' : ''}</title></path>`;
+    /* category name runs outward from the inner edge; flipped on the left half so it never reads upside down */
+    const [lx, ly] = polar(R0 + 5, mid), flip = mid > 90;
+    out += `<text class="seg-lbl ${fin ? 'lbl-finish' : 'lbl-' + s.cat}" font-size="${fs}" dy=".35em" text-anchor="${flip ? 'end' : 'start'}" transform="translate(${f1(lx)} ${f1(ly)}) rotate(${f1(flip ? mid + 180 : mid)})">${fin ? 'Finish' : CAT[s.cat]}</text>`;
+    const [bx, by] = polar(R1 - 11, mid);
+    if (s.spade) out += `<g class="spade" transform="translate(${f1(bx)} ${f1(by)})"><circle r="8"/><text y="3.8" text-anchor="middle" font-size="10">♠</text></g>`;
+    if (s.spin) out += `<g class="spin-badge" transform="translate(${f1(bx)} ${f1(by)})">${spinBadge(7.5)}</g>`;
+    if (fin) out += `<text class="fin-glyph" x="${f1(bx)}" y="${f1(by + 4)}" text-anchor="middle">★</text>`;
+  });
+  const [dx1, dy1] = polar(R0 - 7, -90), [dx2, dy2] = polar(R1 + 5, -90);
+  out += `<line class="divider" x1="${f1(dx1)}" y1="${f1(dy1)}" x2="${f1(dx2)}" y2="${f1(dy2)}"/>`;
+  out += `<circle class="plate" cx="200" cy="200" r="${R0 - 1}"/>`;
+  out += `<text class="ring-label" x="208" y="101">START ›</text><text class="ring-label" x="192" y="101" text-anchor="end">‹ FINISH</text>`;
+  return `<svg viewBox="0 0 400 400" role="img" aria-label="Circular board with ${n} spaces">${out}${withTokens ? '<g id="tokens"></g>' : ''}</svg>`;
+}
+function legendHTML() {
+  return ORDER.map(c => `<li><span class="pill cat-${c}">${CAT[c]}</span></li>`).join('') +
+    `<li><span class="spade-key" aria-hidden="true">♠</span>Spade: a word from any category</li>` +
+    `<li><svg class="spin-key" viewBox="-11 -11 22 22" aria-hidden="true">${spinBadge(10)}</svg>Spinner: move any team ±1 or ±2</li>`;
+}
+function updateTokens() {
+  const g = document.getElementById('tokens');
+  if (!g || !S) return;
+  const n = S.len, step = 360 / n, groups = {};
+  S.teams.forEach((t, i) => { const p = disp[i] ?? t.pos; (groups[p] = groups[p] || []).push(i); });
+  const base = Math.min(9.5, Math.PI * 146 / n);
+  S.teams.forEach((t, i) => {
+    let el = document.getElementById('tok' + i), fresh = false;
+    if (!el) {
+      el = document.createElementNS(NS, 'g');
+      el.id = 'tok' + i; el.setAttribute('class', 'tok');
+      el.innerHTML = `<circle class="halo" r="10"/><circle class="body" r="9" fill="${t.color}"/><text class="tok-t" text-anchor="middle">${i + 1}</text>`;
+      el.style.transition = 'none'; fresh = true;
+      g.appendChild(el);
+    }
+    const p = disp[i] ?? t.pos, grp = groups[p], k = grp.indexOf(i), c = grp.length;
+    const r = c === 1 ? 161 : 128 + k * (36 / (c - 1));
+    const tang = c > 2 ? ((k % 2) ? 1 : -1) * step * 0.22 : 0;
+    const [x, y] = polar(r, -90 + (p + .5) * step + tang);
+    const rad = c <= 2 ? base : c <= 4 ? Math.min(base, 7.4) : Math.min(base, 6.2);
+    el.querySelector('.body').setAttribute('r', f1(rad));
+    el.querySelector('.halo').setAttribute('r', f1(rad + 1.5));
+    const tx = el.querySelector('.tok-t');
+    tx.setAttribute('font-size', f1(rad * 1.05)); tx.setAttribute('y', f1(rad * .37));
+    el.style.transform = `translate(${f1(x)}px, ${f1(y)}px)`;
+    el.classList.toggle('active', i === S.cur && S.phase !== 'win');
+    if (fresh) requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transition = ''; }));
+  });
+}
+function animateMove(ti, from, to, done) {
+  if (to === from) { done(); return; }
+  const dir = to > from ? 1 : -1;
+  disp[ti] = from; updateTokens();
+  const iv = setInterval(() => {
+    disp[ti] += dir; sfx.step(); updateTokens();
+    if (disp[ti] === to) { clearInterval(iv); delete disp[ti]; updateTokens(); setTimeout(done, 450); }
+  }, 280);
+}
+
+/* ---------- cards ---------- */
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+/* words already played in earlier games on this device, so new games don't repeat them */
+const SEEN_KEY = 'spade-speak-seen-v1';
+function draw(cat) {
+  if (cat === 'any') cat = ORDER[Math.floor(Math.random() * ORDER.length)];
+  const mode = POOLS[S.words] ? S.words : 'normal', mix = MIX[mode], pool = Math.random() < mix[1] ? mix[0] : mode;
+  const seen = fetchStore(SEEN_KEY) || {}, list = POOLS[pool][cat], key = pool + ':' + cat;
+  if (!S.decks[key] || !S.decks[key].length) {
+    const used = new Set(seen[cat] || []);
+    let idx = list.map((_, i) => i).filter(i => !used.has(list[i]));
+    if (idx.length < 15) { idx = list.map((_, i) => i); seen[cat] = (seen[cat] || []).filter(w => !list.includes(w)); }
+    S.decks[key] = shuffle(idx);
+  }
+  const word = list[S.decks[key].pop()];
+  (seen[cat] = seen[cat] || []).push(word);
+  store(SEEN_KEY, seen);
+  /* in Normal, the odd hard word is flagged on the card */
+  return { cat, word, hard: pool === 'normalHard' };
+}
+function posLabel(p) { return p === 0 ? 'the start' : p === S.len - 1 ? 'the finish' : 'space ' + p; }
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+/* end-of-game awards, worked out from the log of turns */
+function awardsHTML(log, teams) {
+  if (!log || !log.length) return '';
+  const nm = e => e.d || teams[e.t].name;
+  const people = {}, fouls = {}, zeros = {}, teamWords = teams.map(() => 0);
+  log.forEach(e => {
+    teamWords[e.t] += e.n;
+    if (e.d) people[e.d] = (people[e.d] || 0) + e.n;
+    if (e.f) fouls[nm(e)] = (fouls[nm(e)] || 0) + e.f;
+    if (!e.n) zeros[nm(e)] = (zeros[nm(e)] || 0) + 1;
+  });
+  const top = o => Object.entries(o).sort((a, b) => b[1] - a[1])[0];
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const cards = [];
+  const star = top(people);
+  if (star && star[1] > 0) cards.push(['🗣️', 'Star describer', star[0], `${plural(star[1], 'word')} described`]);
+  const best = log.reduce((a, e) => e.n > a.n ? e : a, log[0]);
+  if (best.n > 0) cards.push(['⚡', 'Best turn', nm(best), `${best.n} right in one turn`]);
+  const ti = teamWords.indexOf(Math.max(...teamWords));
+  cards.push(['📚', 'Most words', teams[ti].name, `${plural(teamWords[ti], 'word')} all game`]);
+  const fm = top(fouls);
+  if (fm) cards.push(['🚩', 'Foul magnet', fm[0], `${plural(fm[1], 'card')} lost to fouls`]);
+  const tl = top(zeros);
+  if (tl) cards.push(['😅', 'Tough luck', tl[0], `${plural(tl[1], 'turn')} with none right`]);
+  return `<p class="eyebrow" style="margin-top:6px">Awards</p><div class="awards">${cards.map(([ic, title, who, what]) =>
+    `<div class="award"><span class="aw-ic" aria-hidden="true">${ic}</span><b>${title}</b><span class="aw-who" dir="auto">${esc(who)}</span><small>${what}</small></div>`).join('')}</div>`;
+}
+function describer(ti, offset = 0) {
+  const t = S.teams[ti];
+  return t.players.length ? t.players[(t.desc + offset) % t.players.length] : null;
+}
+
+/* ---------- timer ---------- */
+const tm = { raf: 0, end: 0, onEnd: null, lastSec: null };
+function startTimer(onEnd) {
+  if (onEnd) tm.onEnd = onEnd;
+  tm.end = performance.now() + S.turn.left * 1000;
+  tm.lastSec = Math.ceil(S.turn.left);
+  clearInterval(tm.raf);
+  tm.raf = setInterval(tick, 100);
+}
+function stopTimer() { clearInterval(tm.raf); tm.raf = 0; }
+function tick() {
+  const left = Math.max(0, (tm.end - performance.now()) / 1000);
+  S.turn.left = left;
+  paintTimer(left);
+  const sec = Math.ceil(left);
+  if (sec !== tm.lastSec) { tm.lastSec = sec; if (sec <= 5 && sec > 0) sfx.tick(); }
+  if (left <= 0) {
+    stopTimer(); sfx.buzz();
+    const cb = tm.onEnd; tm.onEnd = null; cb && cb();
+  }
+}
+function paintTimer(left) {
+  const box = $('#timer'); if (!box) return;
+  const C = 2 * Math.PI * 42;
+  box.querySelector('.prog').style.strokeDashoffset = f1(C * (1 - left / TURN_SECONDS));
+  box.querySelector('span').textContent = Math.ceil(left);
+  box.classList.toggle('low', left <= 5 && left > 0);
+}
+function timerHTML() {
+  const C = 2 * Math.PI * 42;
+  return `<div class="timer" id="timer" role="timer" aria-label="Seconds left"><svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="42"/><circle class="prog" cx="50" cy="50" r="42" stroke-dasharray="${f1(C)}" stroke-dashoffset="0"/></svg><span>${Math.ceil(S.turn ? S.turn.left : TURN_SECONDS)}</span></div>`;
+}
+
+/* ---------- game flow ---------- */
+function newTurn(mode, cat) {
+  Object.values(S.decks).forEach(shuffle);   // fresh random order at the start of every turn
+  return { mode, cat, card: null, parked: null, skipUsed: false, records: [], left: TURN_SECONDS, paused: false };
+}
+
+function startGame() {
+  readDraftInputs();
+  const teams = draft.teams.slice(0, draft.count).map((t, i) => ({
+    name: (t.name || '').trim() || `Team ${i + 1}`, color: TEAM_COLORS[i],
+    players: (t.players || '').split(',').map(s => s.trim()).filter(Boolean), pos: 0, desc: 0
+  }));
+  S = { phase: 'idle', len: draft.len, words: MODES[draft.words] ? draft.words : 'normal', spaces: buildSpaces(draft.len), teams, cur: 0, decks: {}, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, winner: null, log: [] };
+  store(DRAFT_KEY, draft); saved = null; disp = {}; boardKey = '';
+  save(); render();
+}
+function endTurnAdvance() {
+  const t = S.teams[S.cur];
+  t.desc++;
+  S.cur = (S.cur + 1) % S.teams.length;
+  S.phase = 'idle'; S.turn = null; S.spade = null; S.spinner = null; S.vote = null; S.after = null;
+  save(); render();
+}
+function runAfter() {
+  if (S.after === 'spin') {
+    S.spinner = { by: S.cur, result: null, slice: null, at: 0 };
+    S.phase = 'spin'; S.after = null; sfx.spinner();
+    save(); render();
+  } else endTurnAdvance();
+}
+function onTimeUp() {
+  const tr = S.turn;
+  if (tr.mode === 'final') { S.phase = 'final-fail'; save(); render(); return; }
+  if (tr.parked) tr.records.push({ word: tr.parked.word, res: 'skipped', ok: false });
+  if (tr.card) tr.records.push({ word: tr.card.word, res: 'timeout', ok: false });
+  tr.card = null; tr.parked = null;
+  S.phase = 'review'; save(); render();
+}
+
+const RES_LABEL = { correct: 'Got it', skipped: 'Skipped', foul: 'Said the word', timeout: 'Time ran out' };
+
+const ACT = {
+  count(b) { readDraftInputs(); draft.count = +b.dataset.n; store(DRAFT_KEY, draft); renderSetup(); },
+  len(b) { readDraftInputs(); draft.len = +b.dataset.n; store(DRAFT_KEY, draft); renderSetup(); },
+  words(b) { readDraftInputs(); draft.words = b.dataset.mode; store(DRAFT_KEY, draft); renderSetup(); },
+  start: startGame,
+  resume() { S = saved; saved = null; normalize(); boardKey = ''; render(); },
+  discard() { store(SAVE_KEY, null); saved = null; renderSetup(); },
+  rules: openRules,
+  closeRules,
+  sound() { muted = !muted; ensureAudio(); $('#soundBtn').textContent = muted ? 'Sound off' : 'Sound on'; },
+  newgame(b) {
+    if (b.dataset.armed) {
+      stopTimer(); store(SAVE_KEY, null); S = null; disp = {};
+      b.textContent = 'New game'; delete b.dataset.armed; render(); return;
+    }
+    b.dataset.armed = '1'; b.textContent = 'Tap again to end game';
+    setTimeout(() => { if (b.dataset.armed) { delete b.dataset.armed; b.textContent = 'New game'; } }, 3500);
+  },
+  startTurn() {
+    ensureAudio();
+    const t = S.teams[S.cur];
+    if (t.pos === S.len - 1) { S.phase = 'final-choose'; }
+    else { S.turn = newTurn('normal', S.spaces[t.pos].cat); S.phase = 'ready'; }
+    save(); render();
+  },
+  cancelReady() { S.phase = 'idle'; S.turn = null; save(); render(); },
+  finalCat(b) { S.turn = newTurn('final', b.dataset.cat); S.phase = 'ready'; save(); render(); },
+  go() {
+    ensureAudio(); keepAwake();
+    S.turn.card = draw(S.turn.cat); S.turn.left = TURN_SECONDS;
+    S.phase = 'play'; save(); render();
+    startTimer(onTimeUp);
+  },
+  got() {
+    const tr = S.turn; if (S.phase !== 'play' || tr.paused) return;
+    sfx.ok();
+    if (tr.mode === 'final') {
+      stopTimer(); tm.onEnd = null;
+      tr.records.push({ word: tr.card.word, res: 'correct', ok: true });
+      tr.card = null; tr.parked = null;
+      S.phase = 'review'; save(); render(); return;
+    }
+    tr.records.push({ word: tr.card.word, res: 'correct', ok: true });
+    tr.card = draw(tr.cat); save(); renderStage();
+  },
+  skip() {
+    const tr = S.turn; if (S.phase !== 'play' || tr.paused || tr.skipUsed) return;
+    sfx.skip(); tr.skipUsed = true; tr.parked = tr.card; tr.card = draw(tr.cat); save(); renderStage();
+  },
+  useParked() {
+    const tr = S.turn; if (S.phase !== 'play' || tr.paused || !tr.parked) return;
+    sfx.skip();
+    /* swap: the card you were on waits on the side instead, so nothing is lost */
+    [tr.card, tr.parked] = [tr.parked, tr.card]; save(); renderStage();
+  },
+  foul() {
+    const tr = S.turn; if (S.phase !== 'play' || tr.paused) return;
+    sfx.foul(); tr.records.push({ word: tr.card.word, res: 'foul', ok: false });
+    tr.card = draw(tr.cat); save(); renderStage();
+  },
+  pause() {
+    const tr = S.turn; if (!tr) return;
+    if (tr.paused) { tr.paused = false; renderStage(); startTimer(); }
+    else { stopTimer(); tr.paused = true; save(); renderStage(); }
+  },
+  toggle(b) {
+    const r = S.turn.records[+b.dataset.i];
+    if (r.status || S.vote) return;
+    r.ok = !r.ok; save(); renderStage();
+  },
+  challenge(b) {
+    const r = S.turn.records[+b.dataset.i];
+    if (!r.ok || r.status || S.vote) return;
+    r.status = 'challenged'; sfx.flag(); save(); renderStage();
+  },
+  acceptFoul(b) {
+    const r = S.turn.records[+b.dataset.i];
+    if (r.status !== 'challenged' || S.vote) return;
+    Object.assign(r, { status: 'upheld', ok: false, res: 'foul' }); sfx.foul(); save(); renderStage();
+  },
+  dispute(b) {
+    const i = +b.dataset.i;
+    if (S.turn.records[i].status !== 'challenged' || S.vote) return;
+    S.vote = { i, foul: 0, fair: 0 }; save(); renderStage();
+  },
+  voteCount(b) {
+    const k = b.dataset.k; S.vote[k] = Math.max(0, S.vote[k] + +b.dataset.n); save(); renderStage();
+  },
+  settleVote() {
+    const v = S.vote, r = S.turn.records[v.i];
+    if (v.foul > v.fair) { Object.assign(r, { status: 'upheld', ok: false, res: 'foul' }); sfx.foul(); }
+    else { r.status = 'fair'; sfx.ok(); }
+    r.tally = `${v.foul}–${v.fair}`; S.vote = null; save(); renderStage();
+  },
+  cancelVote() { S.vote = null; save(); renderStage(); },
+  confirmMove() {
+    if (S.vote || S.turn.records.some(r => r.status === 'challenged')) return;
+    const t = S.teams[S.cur], n = S.turn.records.filter(r => r.ok).length, from = t.pos;
+    (S.log = S.log || []).push({ t: S.cur, d: describer(S.cur), n, f: S.turn.records.filter(r => r.res === 'foul').length });
+    if (S.turn.mode === 'final') {
+      if (n > 0) { S.winner = S.cur; S.phase = 'win'; save(); render(); sfx.win(); confetti(); }
+      else { S.phase = 'final-fail'; save(); render(); }
+      return;
+    }
+    const to = Math.min(S.len - 1, from + n);
+    t.pos = to;
+    S.last = n === 0 ? `${t.name} didn't get any this time.` : `${t.name} got ${n} right and moved to ${posLabel(to)}.`;
+    S.after = to > from && to < S.len - 1 && S.spaces[to].spin ? 'spin' : 'next';
+    S.phase = 'moving'; save(); render();
+    animateMove(S.cur, from, to, runAfter);
+  },
+  spin() {
+    const sp = S.spinner; if (S.phase !== 'spin' || sp.result != null) return;
+    ensureAudio();
+    const k = Math.floor(Math.random() * SPIN_VALUES.length);
+    Object.assign(sp, { result: SPIN_VALUES[k], slice: k, at: Date.now() });
+    save(); renderStage();
+  },
+  spinPick(b) {
+    const sp = S.spinner; if (S.phase !== 'spin' || sp.result == null || !wheelDone(sp)) return;
+    const ti = +b.dataset.i, w = S.teams[ti], from = w.pos, to = Math.max(0, Math.min(S.len - 1, from + sp.result));
+    const whom = ti === sp.by ? 'their own team' : w.name;
+    w.pos = to;
+    S.last = `Spinner: ${S.teams[sp.by].name} spun ${sp.result > 0 ? '+' : '−'}${Math.abs(sp.result)} and ` +
+      (from === to ? `picked ${whom}, but they couldn't move.` : `moved ${whom} ${sp.result > 0 ? 'forward' : 'back'} to ${posLabel(to)}.`);
+    S.after = 'next'; S.phase = 'moving'; save(); render();
+    animateMove(ti, from, to, runAfter);
+  },
+  cont() { endTurnAdvance(); },
+  rematch() {
+    S.teams.forEach(t => { t.pos = 0; t.desc = 0; });
+    Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, winner: null, log: [] });
+    disp = {}; save(); render();
+  },
+  setupAgain() { store(SAVE_KEY, null); S = null; render(); }
+};
+
+function normalize() {
+  if (!S) return;
+  S.spaces = buildSpaces(S.len);
+  if (S.phase === 'play') {
+    if (S.turn.mode === 'final') { S.phase = 'idle'; S.turn = null; }
+    else onTimeUp();
+  } else if (S.phase === 'spade-play' || S.phase === 'spade-intro') { S.after = 'next'; runAfter(); }   /* the old everyone-plays spade round is gone */
+  else if (S.phase === 'moving') { runAfter(); }
+  if (S.turn) S.turn.paused = false;
+}
+
+/* ---------- rendering ---------- */
+function render() {
+  const inGame = !!S;
+  $('#setup').hidden = inGame;
+  $('#game').hidden = !inGame;
+  $('#newBtn').hidden = !inGame;
+  if (!inGame) { renderSetup(); renderStage(); return; }
+  $('#setup').innerHTML = '';
+  const key = S.len + ':' + S.teams.length;
+  if (boardKey !== key || !$('#tokens')) {
+    $('#boardWrap').innerHTML = boardSVG(S.spaces, true) + '<div class="board-center" id="boardCenter"></div>';
+    $('#legend').innerHTML = legendHTML();
+    boardKey = key;
+  }
+  renderPanel(); updateTokens(); renderStage();
+}
+
+function readDraftInputs() {
+  if (!draft) return;
+  for (let i = 0; i < draft.count; i++) {
+    const n = document.getElementById('tname' + i), p = document.getElementById('tplayers' + i);
+    if (n) draft.teams[i].name = n.value;
+    if (p) draft.teams[i].players = p.value;
+  }
+}
+
+function renderSetup() {
+  const d = draft;
+  const lens = BOARD_SIZES;
+  $('#setup').innerHTML = `
+  <div class="setup-grid">
+    <div class="setup-form">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <p class="eyebrow">Classic rules · 30-second turns · spades and spinners</p>
+        <h1>Describe it fast. Race round the ring.</h1>
+        <p class="lede">Teams take turns describing words against a 30-second clock. Every right answer moves you one space. The first team round the board that wins the final challenge takes it.</p>
+      </div>
+      ${saved ? `<div class="resume"><div><b>Game in progress</b><div class="muted" style="font-size:.9rem">${esc(saved.teams.map(t => t.name).join(' vs '))}</div></div><div class="row"><button class="btn btn-small" data-act="discard">Discard</button><button class="btn btn-primary btn-small" data-act="resume">Resume game</button></div></div>` : ''}
+      <div class="field">
+        <span class="label" id="teamsLabel">How many teams?</span>
+        <div class="seg-group" role="group" aria-labelledby="teamsLabel">${[2, 3, 4, 5, 6].map(n => `<button data-act="count" data-n="${n}" aria-pressed="${n === d.count}">${n}</button>`).join('')}</div>
+      </div>
+      <div class="field">
+        <span class="label">Team names and players</span>
+        <div class="teams">${d.teams.slice(0, d.count).map((t, i) => `
+          <div class="team-row">
+            <span class="swatch" style="background:${TEAM_COLORS[i]}">${i + 1}</span>
+            <input type="text" id="tname${i}" value="${esc(t.name)}" maxlength="24" aria-label="Team ${i + 1} name">
+            <input type="text" id="tplayers${i}" value="${esc(t.players)}" placeholder="Players, e.g. Sam, Alex (optional)" aria-label="Team ${i + 1} players">
+          </div>`).join('')}
+        </div>
+        <p class="muted" style="font-size:.88rem">Add player names and the game tells you whose turn it is to describe.</p>
+      </div>
+      <div class="field">
+        <span class="label" id="lenLabel">Board size</span>
+        <div class="seg-group" role="group" aria-labelledby="lenLabel">${lens.map(([n, l]) => `<button data-act="len" data-n="${n}" aria-pressed="${n === d.len}">${l}</button>`).join('')}</div>
+      </div>
+      <div class="field">
+        <span class="label" id="wordsLabel">Words</span>
+        <div class="seg-group" role="group" aria-labelledby="wordsLabel">${Object.keys(MODES).map(m => `<button data-act="words" data-mode="${m}" aria-pressed="${m === (d.words || 'normal')}">${MODES[m]}</button>`).join('')}</div>
+        <p class="muted" style="font-size:.88rem">${MODE_HINT[d.words || 'normal']}</p>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary btn-lg" data-act="start">Start game</button>
+        <button class="btn btn-lg" data-act="rules">Read the rules</button>
+      </div>
+    </div>
+    <div class="setup-board">
+      <div class="board-wrap">${boardSVG(buildSpaces(d.len))}
+        <div class="board-center"><div class="bc-team">${d.len} spaces</div><div class="bc-sub">${buildSpaces(d.len).filter(s => s.spade).length} spades · ${buildSpaces(d.len).filter(s => s.spin).length} spinners · start at the top, go clockwise</div></div>
+      </div>
+      <ul class="legend">${legendHTML()}</ul>
+    </div>
+  </div>`;
+}
+
+function renderPanel() {
+  const t = S.teams[S.cur], atFinish = t.pos === S.len - 1, cat = S.spaces[t.pos].cat;
+  const who = describer(S.cur);
+  const moving = S.phase === 'moving';
+  $('#boardCenter').innerHTML = `
+    <div class="bc-team"><span class="dot" style="background:${t.color}"></span>${esc(t.name)}</div>
+    ${atFinish ? '<span class="pill" style="background:var(--finish);color:var(--plate)">Final challenge</span>' : `<span class="pill cat-${cat}">${CAT[cat]}</span>`}
+    <div class="bc-sub">${t.pos === 0 ? 'On the start' : atFinish ? 'At the finish' : `Space ${t.pos} · ${S.len - 1 - t.pos} to go`}</div>`;
+  const describerLine = who
+    ? `<p><b>${esc(who)}</b> describes this turn${t.players.length > 1 ? `<span class="muted"> · next up: ${esc(describer(S.cur, 1))}</span>` : ''}</p>`
+    : `<p class="muted">Pick a describer who hasn't had a go yet. Swap every turn.</p>`;
+  $('#panel').innerHTML = `
+    <div class="turn-card">
+      <p class="eyebrow">${moving ? 'Moving' : 'Up next'}</p>
+      <h2><span class="dot" style="background:${t.color}"></span>${esc(t.name)}</h2>
+      ${describerLine}
+      ${atFinish
+        ? `<div class="final-block"><b>Final challenge</b>The other teams pick a category. Get 1 card right in 30 seconds to win.</div>`
+        : `<div class="cat-block cat-${cat}"><span>Category for this turn</span><b>${CAT[cat]}</b><span>${HINT[cat]}</span></div>`}
+      <button class="btn btn-primary btn-lg" data-act="startTurn" ${moving ? 'disabled' : ''}>${moving ? 'Moving…' : atFinish ? 'Start final challenge' : 'Start turn'}</button>
+    </div>
+    <div class="race">
+      <h3>The race</h3>
+      ${S.teams.map((tm2, i) => `
+        <div class="race-row ${i === S.cur ? 'is-cur' : ''}">
+          <div class="race-name"><span class="dot" style="background:${tm2.color}"></span><span>${esc(tm2.name)}</span></div>
+          <div class="race-pos">${tm2.pos === S.len - 1 ? 'Finish' : tm2.pos === 0 ? 'Start' : tm2.pos + ' / ' + (S.len - 1)}</div>
+          <div class="bar"><i style="width:${(tm2.pos / (S.len - 1)) * 100}%;background:${tm2.color}"></i></div>
+        </div>`).join('')}
+    </div>
+    ${S.last ? `<p class="last">${esc(S.last)}</p>` : ''}`;
+}
+
+/* spinner wheel: eases onto the chosen slice; timed from sp.at so a reload lands it straight away */
+const wa = { id: null, start: 0, final: 0, iv: 0, tick: 0 };
+function wheelSVG() {
+  const n = SPIN_VALUES.length, step = 360 / n, pt = (r, d) => [r * Math.cos(d * Math.PI / 180), r * Math.sin(d * Math.PI / 180)];
+  let s = '';
+  SPIN_VALUES.forEach((val, k) => {
+    const a0 = -90 + k * step, a1 = a0 + step, mid = a0 + step / 2;
+    const [x1, y1] = pt(100, a0), [x2, y2] = pt(100, a1), [tx, ty] = pt(68, mid);
+    const fill = val > 0 ? (k % 4 < 2 ? '#1E9B5A' : '#27B66D') : (k % 4 < 2 ? '#D9363E' : '#EA545B');
+    s += `<path d="M0 0L${f1(x1)} ${f1(y1)}A100 100 0 0 1 ${f1(x2)} ${f1(y2)}Z" fill="${fill}" stroke="#fff" stroke-width="2"/>`;
+    s += `<text class="wheel-lbl" text-anchor="middle" dy=".35em" transform="translate(${f1(tx)} ${f1(ty)}) rotate(${f1(mid + 90)})">${val > 0 ? '+' : '−'}${Math.abs(val)}</text>`;
+  });
+  return `<div class="wheel-wrap"><svg viewBox="-112 -120 224 232" aria-hidden="true"><g id="wheel">${s}<circle r="100" fill="none" stroke="#fff" stroke-width="5"/><circle r="15" fill="#fff"/></g><path class="wheel-pin" d="M-13 -117L13 -117L0 -88Z"/></svg></div>`;
+}
+function wheelAngle() { const t = Math.min(1, (performance.now() - wa.start) / SPIN_MS); return wa.final * (1 - Math.pow(1 - t, 3)); }
+function wheelDone(sp) { return sp.result != null && Date.now() - sp.at >= SPIN_MS; }
+function paintWheel(a) { const g = document.getElementById('wheel'); if (g) g.setAttribute('transform', `rotate(${f1(a)})`); }
+function driveWheel(sp) {
+  if (sp.result == null) { paintWheel(0); return; }
+  if (wa.id !== sp.at) {
+    clearInterval(wa.iv); wa.iv = 0;
+    const step = 360 / SPIN_VALUES.length;
+    Object.assign(wa, { id: sp.at, start: performance.now() - (Date.now() - sp.at), final: 360 * 6 - (sp.slice * step + step / 2), tick: 0 });
+    if (!wheelDone(sp)) wa.iv = setInterval(() => {
+      const a = wheelAngle(); paintWheel(a);
+      const tk = Math.floor(a / step);
+      if (tk !== wa.tick) { wa.tick = tk; sfx.step(); }
+      if (wheelDone(sp)) { clearInterval(wa.iv); wa.iv = 0; sfx.ok(); renderStage(); }
+    }, 16);
+  }
+  paintWheel(wheelAngle());
+}
+
+const STAGE = {
+  ready() {
+    const t = S.teams[S.cur], who = describer(S.cur), tr = S.turn, fin = tr.mode === 'final';
+    return `<div class="stage-inner">
+      <p class="eyebrow">${esc(t.name)}${fin ? ' · final challenge' : ''}</p>
+      <h2>Pass the device to ${who ? esc(who) : 'your describer'}</h2>
+      <p class="sub">${fin ? `Get 1 card right in 30 seconds and you win the game.` : 'Only the describer looks at the screen. Teammates, get ready to shout.'}</p>
+      <div><span class="pill cat-${tr.cat}" style="font-size:1.05rem">${CAT[tr.cat]} · ${HINT[tr.cat]}</span></div>
+      <ul class="rules-list">
+        <li>Saying the word or part of it</li><li>"Sounds like" or rhymes</li>
+        <li>First letters or spelling</li><li>Other languages</li><li>Acting, miming or pointing</li>
+      </ul>
+      <p class="house"><b>1 skip this turn.</b> The skipped card waits on the side. You can go back to it any time this turn, even after getting others right.</p>
+      <p class="house"><b>Other teams, watch the screen.</b> Shout "Foul!" if the describer says the word or part of it. You can also challenge any card after the turn.</p>
+      <div class="row">
+        <button class="btn btn-ghost btn-lg" data-act="cancelReady">Back</button>
+        <button class="btn btn-go btn-lg grow" data-act="go">Start 30 seconds</button>
+      </div>
+    </div>`;
+  },
+  play() {
+    const tr = S.turn, fin = tr.mode === 'final', got = tr.records.filter(r => r.ok).length;
+    const cc = tr.card && tr.card.cat || tr.cat;
+    return `<div class="stage-inner">
+      <div class="play-top">
+        ${timerHTML()}
+        <div class="tally">${fin ? `<b>1</b><span>to win</span>` : `<b>${got}</b><span>correct</span>`}</div>
+      </div>
+      <div class="card-stack">
+        <div class="card cat-${cc} ${tr.paused ? 'paused' : ''}">
+          <div class="card-band"><span>${fin ? 'Final · ' : tr.cat === 'any' ? '♠ Any · ' : ''}${CAT[cc]}${tr.card && tr.card.hard && !tr.paused ? ' · ★ Hard' : ''}</span><span>${esc(S.teams[S.cur].name)}</span></div>
+          <div class="card-word" dir="auto">${tr.paused ? 'Paused' : esc(tr.card.word)}</div>
+        </div>
+      </div>
+      <div class="parked">
+        ${tr.parked
+          ? `<span>Skipped: <b>${tr.paused ? '•••' : esc(tr.parked.word)}</b></span><span class="kbd-hint">Go back any time. This card waits here instead.</span>`
+          : `<span class="kbd-hint">${tr.skipUsed ? 'Skip used this turn.' : 'You have 1 skip this turn.'}</span>`}
+      </div>
+      <div class="play-actions">
+        ${tr.parked
+          ? `<button class="btn btn-skip" data-act="useParked" ${tr.paused ? 'disabled' : ''}>↩ Back to skipped</button>`
+          : `<button class="btn btn-skip" data-act="skip" ${tr.skipUsed || tr.paused ? 'disabled' : ''}>${tr.skipUsed ? 'Skip used' : 'Skip'}</button>`}
+        <button class="btn btn-go" data-act="got" ${tr.paused ? 'disabled' : ''}>Got it ✓</button>
+      </div>
+      <div class="play-foot">
+        <button class="link" data-act="foul" ${tr.paused ? 'disabled' : ''}>🚩 Foul called? Lose this card</button>
+        <button class="link" data-act="pause">${tr.paused ? 'Resume' : 'Pause'}</button>
+      </div>
+      <p class="kbd-hint">Keyboard: Space = got it · S = skip · B = back to skipped</p>
+    </div>`;
+  },
+  review() {
+    const tr = S.turn, t = S.teams[S.cur], n = tr.records.filter(r => r.ok).length, fin = tr.mode === 'final';
+    const to = Math.min(S.len - 1, t.pos + n), vt = S.vote;
+    const pending = !!vt || tr.records.some(r => r.status === 'challenged');
+    const tag = r => r.status === 'challenged' ? '🚩 Challenged' : r.status === 'upheld' ? `🚩 Foul upheld${r.tally ? ' (' + r.tally + ')' : ''}`
+      : r.status === 'fair' ? `✓ Challenge rejected${r.tally ? ' (' + r.tally + ')' : ''}` : r.ok ? '✓ Correct' : r.res === 'correct' ? 'Not counted' : RES_LABEL[r.res];
+    const acts = (r, i) => vt ? '' : r.status === 'challenged'
+      ? `<div class="rv-actions"><button class="btn btn-foul" data-act="acceptFoul" data-i="${i}">Fair call, remove it</button><button class="btn" data-act="dispute" data-i="${i}">Dispute: vote on it</button></div>`
+      : r.ok && !r.status ? `<div class="rv-actions"><button class="btn" data-act="challenge" data-i="${i}">🚩 Challenge</button></div>` : '';
+    const voteBox = vt ? `<div class="vote-box">
+        <p class="eyebrow">Vote</p>
+        <h3>Did they say "${esc(tr.records[vt.i].word)}" or part of it?</h3>
+        <p class="sub">Everyone except the describer puts a hand up for Foul or Fair. Count the hands. More foul votes removes the card. A tie means it counts.</p>
+        <div class="vote-row">${[['foul', '🚩 Foul'], ['fair', '✓ Fair']].map(([k, l]) => `<div class="counter"><span>${l}</span><div>
+          <button class="btn" data-act="voteCount" data-k="${k}" data-n="-1" aria-label="One fewer ${k} vote" ${vt[k] ? '' : 'disabled'}>−</button><b>${vt[k]}</b>
+          <button class="btn" data-act="voteCount" data-k="${k}" data-n="1" aria-label="One more ${k} vote">+</button></div></div>`).join('')}</div>
+        <div class="row"><button class="btn btn-ghost" data-act="cancelVote">Back</button><button class="btn btn-go grow" data-act="settleVote">Settle the vote (${vt.foul}–${vt.fair})</button></div>
+      </div>` : '';
+    const line = fin ? (n ? `${esc(t.name)} win unless a challenge holds up.` : 'The card was ruled a foul.')
+      : `Move forward <b>${n}</b> ${n === 1 ? 'space' : 'spaces'}${n === 0 ? '' : to === S.len - 1 ? ' — to the finish!' : S.spaces[to].spade ? ' — onto a spade (any category next turn)!' : S.spaces[to].spin ? ' — onto a spinner!' : ''}`;
+    const label = pending ? 'Settle the challenge first' : fin ? (n ? 'Confirm the win' : 'End turn') : n ? `Move ${esc(t.name)}` : 'End turn';
+    return `<div class="stage-inner">
+      <p class="eyebrow">${esc(t.name)}${fin ? ' · final challenge' : ''}</p>
+      <h2>${fin ? 'They got it!' : "Time's up!"}</h2>
+      <p class="sub">${fin ? 'Other teams: did the describer say the word? Challenge it now, before the win counts.' : 'Check the cards. Tap one to change it, for example if the team shouted the answer right on the buzzer. Other teams can challenge any card that counted.'}</p>
+      ${voteBox}
+      <ul class="review-list">${tr.records.map((r, i) => `
+        <li class="rv-item"><button class="rv ${r.ok ? 'ok' : ''} ${r.status === 'challenged' || r.status === 'upheld' ? 'flag' : ''}" data-act="toggle" data-i="${i}" aria-pressed="${r.ok}" ${r.status || vt ? 'disabled' : ''}>
+          <span class="rv-word">${esc(r.word)}</span><span class="rv-tag">${tag(r)}</span>
+        </button>${acts(r, i)}</li>`).join('')}
+      </ul>
+      <p class="move-line">${line}</p>
+      <button class="btn btn-go btn-lg" data-act="confirmMove" ${pending ? 'disabled' : ''}>${label}</button>
+    </div>`;
+  },
+  spin() {
+    const sp = S.spinner, by = S.teams[sp.by];
+    const spun = sp.result != null, done = wheelDone(sp), n = spun ? Math.abs(sp.result) : 0, fwd = spun && sp.result > 0;
+    return `<div class="stage-inner">
+      <p class="eyebrow">Spinner space</p>
+      <h2>${esc(by.name)} landed on a spinner!</h2>
+      <p class="sub">${!spun ? `Spin for +1, +2, −1 or −2. Then ${esc(by.name)} choose any team to move: their own or another team.` : !done ? 'Spinning…' : `${fwd ? 'Forward' : 'Back'} ${n}! ${esc(by.name)}, pick the team to move.`}</p>
+      ${wheelSVG()}
+      ${done ? `<div class="spin-result">${fwd ? '+' : '−'}${n}</div>` : ''}
+      ${!spun ? `<button class="btn btn-go btn-lg" data-act="spin">${esc(by.name)}, spin!</button>` : ''}
+      ${done ? `<div class="spin-grid">${S.teams.map((t, i) => {
+        const to = Math.max(0, Math.min(S.len - 1, t.pos + sp.result));
+        return `<button class="btn spin-btn" style="--team:${t.color}" data-act="spinPick" data-i="${i}"><b>${fwd ? 'Move' : 'Send back'} ${esc(t.name)}${i === sp.by ? ' (their own team)' : ''}</b><span>${to === t.pos ? `Can't move from ${posLabel(t.pos)}` : `${cap(posLabel(t.pos))} → ${posLabel(to)}`}</span></button>`;
+      }).join('')}</div>` : ''}
+    </div>`;
+  },
+  'final-choose'() {
+    const t = S.teams[S.cur];
+    return `<div class="stage-inner">
+      <p class="eyebrow">Final challenge</p>
+      <h2>${esc(t.name)} reached the finish</h2>
+      <p class="sub">To win, they need 1 right answer in 30 seconds. <b>The other teams</b> choose the category. Pick the one you think is hardest for them.</p>
+      <div class="cat-grid">${ORDER.map(c => `<button class="btn cat-btn cat-${c}" data-act="finalCat" data-cat="${c}"><b>${CAT[c]}</b><span>${HINT[c]}</span></button>`).join('')}</div>
+      <button class="btn btn-ghost" data-act="cancelReady">Back</button>
+    </div>`;
+  },
+  'final-fail'() {
+    const t = S.teams[S.cur];
+    return `<div class="stage-inner">
+      <p class="eyebrow">Final challenge</p>
+      <h2>Not this time</h2>
+      <p class="sub">${esc(t.name)} didn't get the card. They stay on the finish and try again next turn, with a new category picked by the other teams.</p>
+      <button class="btn btn-go btn-lg" data-act="cont">Next team</button>
+    </div>`;
+  },
+  win() {
+    const t = S.teams[S.winner];
+    return `<div class="stage-inner" style="text-align:center;align-items:center">
+      <div class="spade-big" aria-hidden="true">♠</div>
+      <p class="eyebrow">Winners</p>
+      <h2 class="win-name" style="--team:${t.color}">${esc(t.name)}</h2>
+      <p class="sub">They made it round the ring and nailed the final card.</p>
+      ${awardsHTML(S.log, S.teams)}
+      <div class="row" style="justify-content:center">
+        <button class="btn btn-go btn-lg" data-act="rematch">Rematch, same teams</button>
+        <button class="btn btn-ghost btn-lg" data-act="setupAgain">New setup</button>
+      </div>
+    </div>`;
+  }
+};
+
+function renderStage() {
+  const st = $('#stage'), ph = S && S.phase;
+  if (ph !== 'spin' && wa.iv) { clearInterval(wa.iv); wa.iv = 0; wa.id = null; }
+  if (!S || !STAGE[ph]) { st.hidden = true; st.innerHTML = ''; document.body.classList.remove('locked'); return; }
+  st.hidden = false; document.body.classList.add('locked');
+  st.innerHTML = STAGE[ph]();
+  if (ph === 'play') paintTimer(S.turn.left);
+  if (ph === 'spin') driveWheel(S.spinner);
+  if (document.activeElement && document.activeElement !== document.body && !st.contains(document.activeElement)) document.activeElement.blur();
+}
+
+function confetti() {
+  const box = document.createElement('div'); box.className = 'confetti';
+  const cols = ['var(--c-object)', 'var(--c-action)', 'var(--c-world)', 'var(--c-person)', 'var(--c-random)', 'var(--c-nature)'];
+  for (let i = 0; i < 90; i++) {
+    const p = document.createElement('i');
+    p.style.left = Math.random() * 100 + 'vw';
+    p.style.background = cols[i % 6];
+    p.style.animationDuration = (2.2 + Math.random() * 2) + 's';
+    p.style.animationDelay = (Math.random() * .8) + 's';
+    p.style.transform = `rotate(${Math.random() * 360}deg)`;
+    box.appendChild(p);
+  }
+  document.body.appendChild(box);
+  setTimeout(() => box.remove(), 5500);
+}
+
+/* ---------- rules ---------- */
+function openRules() {
+  $('#rules').innerHTML = `<div class="modal-panel">
+    <div class="modal-head"><h2 id="rulesTitle">How to play</h2><button class="btn btn-small" data-act="closeRules">Close</button></div>
+    <section><h3>Turns</h3><ol>
+      <li>Teams take turns. Each turn, one player is the describer. Swap describer every turn.</li>
+      <li>The describer has 30 seconds to describe as many words as they can from the category of the space their team is on.</li>
+      <li>Teammates shout guesses. Tap <b>Got it</b> for each right answer.</li>
+      <li>When time's up, your team moves forward one space for every right answer.</li>
+    </ol></section>
+    <section><h3>The describer can't</h3><ul>
+      <li>Say the word, or any part of it ("foot" for "football").</li>
+      <li>Say "sounds like" or "rhymes with".</li>
+      <li>Give the first letter or spell it out, or use another language.</li>
+      <li>Act, mime or point. Words only.</li>
+    </ul><p class="muted">Break a rule and that card is lost: tap "Foul called".</p></section>
+    <section><h3>Skips</h3><p>You get <b>1 skip per turn</b>. The skipped card waits on the side, and you can go back to it any time in that turn, even after getting other cards right. Tap <b>↩ Back to skipped</b> and the card you were on waits on the side instead, so you never lose it. Whatever card is still on the side when time runs out doesn't count.</p></section>
+    <section><h3>Fouls and challenges 🚩</h3><ul>
+      <li>The other teams watch the screen, so they can see the word. If the describer says it or part of it, they shout "Foul!" and the describer taps <b>Foul called</b> to lose that card.</li>
+      <li>After the turn, the other teams can tap <b>Challenge</b> on any card that was counted.</li>
+      <li>The describing team either accepts (the card doesn't count) or disputes it. A dispute goes to a show of hands: everyone except the describer votes Foul or Fair. If more people vote foul, the card doesn't count. A tie means it counts.</li>
+      <li>The final card can be challenged too, before the win counts.</li>
+    </ul></section>
+    <section><h3>Spades ♠</h3><p>A spade space has no single category. When your turn starts on one, every card can come from any category. It's a normal turn, not an extra go.</p></section>
+    <section><h3>Word level</h3><p><b>Normal</b>: everyday words, with a harder one now and then (marked ★ Hard). <b>Hard</b>: harder words, with an everyday one now and then. <b>Hardest</b>: the toughest words, with some hard ones mixed in. Action words are always one word. <b>عربي Arabic</b>: every card is in Arabic, with Libyan and Arab places, food and famous people.</p></section>
+    <section><h3>Spinners</h3><p>End your turn on a spinner space (the red and green circle) and your team spins the wheel: +1, +2, −1 or −2. Then you choose any team to move by that amount: your own team, or a team you want to slow down. Moving because of the spinner doesn't set off another spade or spinner.</p></section>
+    <section><h3>Winning</h3><p>Reaching the finish isn't enough. On your next turn, the other teams choose a category and you must get 1 card right before the time runs out. Miss it and you try again next turn. The first team to pass the final challenge wins.</p></section>
+    <section><h3>Play offline</h3><p>Open <b>libyan11.github.io/spade-and-speak/play</b> on your phone once while you have internet, then choose <b>Add to Home Screen</b> (the Share menu on iPhone, the ⋮ menu on Android). After that it opens and plays with no internet.</p></section>
+    <section><h3>Categories</h3><div class="cat-table">${ORDER.map(c => `<div><span class="pill cat-${c}">${CAT[c]}</span>${HINT[c]}</div>`).join('')}</div></section>
+  </div>`;
+  $('#rules').hidden = false;
+  $('#rules [data-act="closeRules"]').focus();
+}
+function closeRules() { $('#rules').hidden = true; $('#rulesBtn').focus(); }
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  if (e.target.id === 'rules') { closeRules(); return; }
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const fn = ACT[b.dataset.act];
+  if (fn) fn(b);
+});
+document.addEventListener('input', e => {
+  if (e.target.id && /^t(name|players)\d$/.test(e.target.id)) { readDraftInputs(); store(DRAFT_KEY, draft); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('#rules').hidden) { closeRules(); return; }
+  if (!S || e.target.closest('input, textarea') || !$('#rules').hidden) return;
+  if (S.phase === 'play') {
+    const k = e.key.toLowerCase();
+    if (k === ' ' || k === 'enter') { e.preventDefault(); ACT.got(); }
+    else if (k === 's') ACT.skip();
+    else if (k === 'b') ACT.useParked();
+    else if (k === 'p') ACT.pause();
+  }
+});
+
+/* ---------- boot ---------- */
+function freshDraft() { return { count: 2, len: 25, words: 'normal', teams: DEFAULT_NAMES.map(name => ({ name, players: '' })) }; }
+function boot(data) {
+  data = data || {};
+  draft = data.draft || fetchStore(DRAFT_KEY) || freshDraft();
+  if (!Array.isArray(draft.teams) || draft.teams.length < 6) draft = freshDraft();
+  if (!BOARD_SIZES.some(([n]) => n === draft.len)) draft.len = 25;   // drafts saved with the old 30/40/50 sizes
+  if (data.S) { S = data.S; normalize(); }
+  else {
+    const g = fetchStore(SAVE_KEY);
+    if (g && g.phase !== 'win' && Array.isArray(g.teams)) saved = g;
+  }
+  render();
+}
+try { window.claude?.hot?.snapshot?.(() => { readDraftInputs(); return { S, draft }; }); } catch (e) {}
+window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+</script>
+<script>
+/* offline: keep a copy of the game on the phone */
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
+</body>
+</html>
