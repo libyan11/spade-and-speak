@@ -7,9 +7,8 @@
 <title>Spade &amp; Speak Online</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Lilita+One&display=swap">
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Lilita+One&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Lilita+One&display=swap"></noscript>
+<script>/* connection tools load in the background, so the page shows at once; room actions wait for NET */window.NET=Promise.all(['vendor/peerjs-1.5.4.min.js','vendor/mqtt-5.10.1.min.js'].map(function(s){return new Promise(function(r){var e=document.createElement('script');e.src=s;e.async=false;e.onload=e.onerror=function(){r()};document.head.appendChild(e)})})).then(function(){window.NET_DONE=1});</script>
 <style>
 /* Layout: ring board on the left, turn panel on the right; turns play on a full-screen stage on every phone */
 :root {
@@ -214,6 +213,23 @@ input[type="text"] { font: inherit; padding: .62em .8em; border-radius: 12px; bo
 .tally { text-align: right; }
 .tally b { font-family: var(--f-display); font-weight: 400; font-size: 2.4rem; line-height: 1; display: block; font-variant-numeric: tabular-nums; }
 .tally span { color: var(--stage-muted); font-size: .85rem; font-weight: 700; }
+/* message from the creator + feedback pop-up */
+.fb-modal { position: fixed; inset: 0; z-index: 300; background: rgba(15, 12, 35, .55); display: grid; place-items: center; padding: 16px; }
+.fb-modal[hidden] { display: none; }
+.fb-card { width: min(440px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--surface); color: var(--ink); border-radius: 22px; padding: 22px; box-shadow: 0 24px 60px rgba(0, 0, 0, .4); display: flex; flex-direction: column; gap: 12px; animation: fbIn .2s ease-out; }
+.fb-from { margin: 0; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.fb-card h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 1.7rem; line-height: 1.1; }
+.fb-msg { margin: 0; color: var(--muted); line-height: 1.45; }
+.fb-stars { display: flex; gap: 4px; }
+.fb-star { font-size: 2.1rem; line-height: 1; background: none; border: 0; cursor: pointer; color: var(--line); padding: 2px 3px; touch-action: manipulation; transition: transform .08s; }
+.fb-star.on { color: #F5B400; }
+.fb-star:active { transform: scale(.9); }
+.fb-card textarea { width: 100%; box-sizing: border-box; border-radius: 14px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); padding: 10px 12px; font: inherit; resize: vertical; min-height: 84px; }
+.fb-row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.fb-never { font-size: .85rem; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.fb-done { margin: 0; font-weight: 800; color: var(--good); }
+@keyframes fbIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .fb-card { animation: none; } }
 /* full card: one word for every category; the space's category is big, the rest are small underneath.
    One category on every card carries a ♠: on a spade space that word is the one to describe. */
 .card-rows { list-style: none; margin: 0; padding: 14px 12px; display: grid; gap: 6px; }
@@ -827,6 +843,72 @@ function logFlush() {
     .catch(() => { logFlush.busy = false; });
 }
 if (LOG_URL) { addEventListener('online', () => setTimeout(logFlush, 2000)); setTimeout(logFlush, 6000); }
+/* ================= MESSAGE FROM THE CREATOR + FEEDBACK =================
+   A note from the creator the first time someone starts a game on this device, and a quick
+   "how was that game?" when a game ends (not again for 3 days after sending, never if they tick the box).
+   Feedback rides the private game-log channel to the owner's Google Sheet; until that address is set,
+   it waits on the device (with the game log queue) and goes as soon as it is. Edit the message here. */
+const CREATOR_MSG = "Thanks for playing Spade & Speak! I'm building this game myself, and your ideas and problems help me make it better. Have fun, and play fair 😉";
+const FB_KEY = 'sps-fb';
+function fbState() { try { return JSON.parse(localStorage.getItem(FB_KEY) || '{}'); } catch (e) { return {}; } }
+function fbSave(o) { try { localStorage.setItem(FB_KEY, JSON.stringify(o)); } catch (e) {} }
+function fbMaybe(kind) {
+  const st = fbState(), now = Date.now();
+  if (document.getElementById('fbModal') && !document.getElementById('fbModal').hidden) return;
+  if (kind === 'start') { if (st.welcomed) return; st.welcomed = now; fbSave(st); }
+  if (kind === 'end') { if (st.never || (st.sent && now - st.sent < 3 * 864e5)) return; }
+  fbOpen(kind);
+}
+function fbOpen(kind) {
+  let m = document.getElementById('fbModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'fbModal'; m.className = 'fb-modal';
+    m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'fbTitle');
+    document.body.appendChild(m);
+  }
+  const start = kind === 'start';
+  m.innerHTML = `<div class="fb-card">
+    <p class="fb-from">💬 A message from the creator</p>
+    <h2 id="fbTitle">${start ? 'Welcome to Spade & Speak!' : kind === 'end' ? 'How was that game?' : 'Tell the creator'}</h2>
+    <p class="fb-msg">${esc(CREATOR_MSG)}</p>
+    ${start ? '' : `<div class="fb-stars" role="group" aria-label="Rate the game">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="fb-star" data-fb-star="${n}" aria-label="${n} out of 5">★</button>`).join('')}</div>`}
+    <textarea id="fbText" maxlength="1000" rows="3" placeholder="${start ? 'Got an idea already? Tell me here (optional)' : 'What did you like? What should change? (optional)'}"></textarea>
+    <div class="fb-row"><button type="button" class="btn" data-fb="close">${start ? "Let's play" : 'Not now'}</button><button type="button" class="btn btn-primary" data-fb="send">Send</button></div>
+    ${kind === 'end' ? `<label class="fb-never"><input type="checkbox" id="fbNever"> Don't ask me after games</label>` : ''}
+    <p class="fb-done" hidden>Thanks! Your message is on its way. 💜</p>
+  </div>`;
+  m.dataset.kind = kind; m.dataset.stars = '0'; m.hidden = false;
+}
+function fbClose() {
+  const m = document.getElementById('fbModal'); if (!m || m.hidden) return;
+  const never = document.getElementById('fbNever');
+  if (never && never.checked) { const st = fbState(); st.never = 1; fbSave(st); }
+  m.hidden = true; m.innerHTML = '';
+}
+function fbSend() {
+  const m = document.getElementById('fbModal'); if (!m) return;
+  const text = (document.getElementById('fbText').value || '').trim().slice(0, 1000), stars = +m.dataset.stars || 0;
+  if (!text && !stars) { fbClose(); return; }
+  try {
+    const dev = matchMedia('(pointer: coarse)').matches ? 'phone/tablet' : 'computer';
+    logSave(logQ().concat([{ k: LOG_KEY, ev: 'feedback', t: Date.now(), ver: LOG_VER, dev, where: m.dataset.kind, rating: stars || '', text, gid: (S && S.gid) || '' }]));
+    setTimeout(logFlush, 300);
+  } catch (e) {}
+  const st = fbState(); st.sent = Date.now(); fbSave(st);
+  m.querySelector('.fb-row').hidden = true; m.querySelector('.fb-done').hidden = false;
+  setTimeout(fbClose, 1400);
+}
+document.addEventListener('click', e => {
+  const m = document.getElementById('fbModal');
+  if (e.target.closest('[data-fb-open]')) { fbOpen('any'); return; }
+  if (!m || m.hidden) return;
+  if (e.target === m) { fbClose(); return; }
+  const star = e.target.closest('[data-fb-star]');
+  if (star) { const n = +star.dataset.fbStar; m.dataset.stars = n; m.querySelectorAll('[data-fb-star]').forEach(b => b.classList.toggle('on', +b.dataset.fbStar <= n)); return; }
+  const b = e.target.closest('[data-fb]');
+  if (b) b.dataset.fb === 'send' ? fbSend() : fbClose();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fbClose(); }, true);
 function logInfo(extra) {
   const right = (S.log || []).reduce((a, e) => a + e.n, 0);
   return { gid: S.gid || '', words: wordPack() + ' · ' + wordLevel(), len: S.len, teams: S.teams.length, names: S.teams.map(t => t.name).join(' / '), turns: (S.log || []).length, right, mins: S.startedAt ? Math.round((Date.now() - S.startedAt) / 6000) / 10 : '', ...extra };
@@ -1760,8 +1842,9 @@ function effects(prev, v) {
   if (v.phase !== prev.phase) {
     if (v.phase === 'spin') sfx.spinner();
     if (v.phase === 'play') keepAwake();
-    if (v.phase === 'win') { sfx.win(); confetti(); }
+    if (v.phase === 'win') { sfx.win(); confetti(); setTimeout(() => fbMaybe('end'), 2600); }
     if (v.phase === 'win' && v.turn && prev.phase === 'play') sfx.ok();
+    if (prev.phase === 'lobby' && v.phase !== 'lobby') setTimeout(() => fbMaybe('start'), 400);
   }
 }
 
@@ -2164,6 +2247,7 @@ function openRules() {
       <li>The final card can be challenged too, before the win counts.</li>
     </ul></section>
     <section><h3>Spades ♠</h3><p>Every card has a word for each category, and a ♠ next to one of them (it changes from card to card). When your turn starts on a spade space, describe the ♠ word on each card. It's a normal turn, not an extra go.</p></section>
+    <section><h3>Feedback</h3><p>Ideas, problems, or a word that was too hard? Send it straight to the creator.</p><button type="button" class="btn btn-small" data-fb-open>💬 Send feedback</button></section>
     <section><h3>Word level</h3><p><b>Normal</b>: everyday words, with a harder one now and then (marked ★ Hard). <b>Medium</b>: everyday words with plenty of harder ones mixed in. <b>Hard</b>: harder words, with an everyday one now and then. <b>Hardest</b>: the toughest words, with some hard ones mixed in. Action words are always one word. <b>Packs</b>: Pack 1 is the classic set; Pack 2 is all new words; Pack 3 is new words plus a few from Pack 1. <b>عربي Arabic</b>: every card is in Arabic, using only well-known places, people, food and everyday things.</p></section>
     <section><h3>Spinners</h3><p>End your turn on a spinner space (the red and green circle) and your team spins the wheel: +1, +2, −1 or −2. Then you choose any team to move by that amount: your own team, or a team you want to slow down. Moving because of the spinner doesn't set off another spade or spinner.</p></section>
     <section><h3>Winning</h3><p>Reaching the finish isn't enough. On your next turn, the other teams choose a category and you must get 1 card right before the time runs out. Miss it and try again next turn. The first team to pass the final challenge wins.</p></section>
@@ -2245,13 +2329,18 @@ const UI = {
 };
 function selectText(el) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
 
+let netWait = false;
 document.addEventListener('click', e => {
   ensureAudio();
   if (e.target.id === 'rules') { UI.closeRules(); return; }
   const b = e.target.closest('[data-act]');
   if (!b || b.disabled) return;
   const a = b.dataset.act;
-  if (UI[a]) { UI[a](b); return; }
+  if (UI[a]) {
+    /* room actions need the connection tools; if they're still loading, run the tap once they arrive */
+    if (!window.NET_DONE && (a === 'create' || a === 'resumeHost' || a === 'joinOpen' || a === 'join')) { if (!netWait) { netWait = true; NET.then(() => { netWait = false; UI[a](b); }); } return; }
+    UI[a](b); return;
+  }
   const data = {};
   if (b.dataset.n) data.n = +b.dataset.n;
   if (b.dataset.i) data.i = +b.dataset.i;
@@ -2283,7 +2372,11 @@ window.addEventListener('beforeunload', e => { if (role === 'host' && S && S.pha
   const savedGuest = LS && getItem(LS, 'sps-guest');
   const hashCode = (location.hash || '').replace('#', '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   render();
-  if (myName && savedGuest && savedGuest.code && (!hashCode || hashCode === savedGuest.code) && (typeof Peer !== 'undefined' || typeof mqtt !== 'undefined')) joinRoom(savedGuest.code);
+  NET.then(() => {
+    if (role) return;
+    dirWatch();
+    if (myName && savedGuest && savedGuest.code && (!hashCode || hashCode === savedGuest.code) && (typeof Peer !== 'undefined' || typeof mqtt !== 'undefined')) joinRoom(savedGuest.code);
+  });
 })();
 </script>
 </body>
