@@ -644,6 +644,42 @@ function newTurn(mode, cat) {
   return { mode, cat, card: null, parked: null, skipUsed: false, records: [], left: TURN_SECONDS, paused: false };
 }
 
+const LOG_VER = /\/play(\/|$)/.test(location.pathname) ? 'offline app' : 'one phone';
+/* ================= PRIVATE GAME LOG (owner only) =================
+   When a game starts and when it ends, one small row goes to the owner's own Google Sheet, which only
+   the owner can open. It's sent in the background after the screen has moved on, so it never slows the
+   game; with no internet it waits on this device (up to 50 rows) and goes with the next one.
+   Nothing is sent while LOG_URL is empty. No player names are sent, only team names and counts. */
+const LOG_URL = '';
+const LOG_KEY = 'sps-log-1';
+function logQ() { try { return JSON.parse(localStorage.getItem('sps-logq') || '[]'); } catch (e) { return []; } }
+function logSave(q) { try { localStorage.setItem('sps-logq', JSON.stringify(q.slice(-50))); } catch (e) {} }
+function gameLog(ev, extra) {
+  if (!LOG_URL) return;
+  try {
+    const dev = matchMedia('(pointer: coarse)').matches ? 'phone/tablet' : 'computer';
+    logSave(logQ().concat([{ k: LOG_KEY, ev, t: Date.now(), ver: LOG_VER, dev, ...extra }]));
+    setTimeout(logFlush, 1500);
+  } catch (e) {}
+}
+function logFlush() {
+  if (!LOG_URL || logFlush.busy || navigator.onLine === false) return;
+  const q = logQ(); if (!q.length) return;
+  logFlush.busy = true;
+  fetch(LOG_URL, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(q[0]) })
+    .then(() => { const r = logQ(); r.shift(); logSave(r); logFlush.busy = false; if (r.length) setTimeout(logFlush, 800); })
+    .catch(() => { logFlush.busy = false; });
+}
+if (LOG_URL) { addEventListener('online', () => setTimeout(logFlush, 2000)); setTimeout(logFlush, 6000); }
+function logInfo(extra) {
+  const right = (S.log || []).reduce((a, e) => a + e.n, 0);
+  return { gid: S.gid || '', words: S.words || 'normal', len: S.len, teams: S.teams.length, names: S.teams.map(t => t.name).join(' / '), turns: (S.log || []).length, right, mins: S.startedAt ? Math.round((Date.now() - S.startedAt) / 6000) / 10 : '', ...extra };
+}
+function logStart(extra) {
+  S.gid = Math.random().toString(36).slice(2, 9); S.startedAt = Date.now();
+  gameLog('start', logInfo(extra));
+}
+function logPlayers() { return S.teams.reduce((a, t) => a + t.players.length, 0) || ''; }
 function startGame() {
   readDraftInputs();
   const teams = draft.teams.slice(0, draft.count).map((t, i) => ({
@@ -651,6 +687,7 @@ function startGame() {
     players: (t.players || '').split(',').map(s => s.trim()).filter(Boolean), pos: 0, desc: 0
   }));
   S = { phase: 'idle', len: draft.len, words: MODES[draft.words] ? draft.words : 'normal', spaces: buildSpaces(draft.len), teams, cur: 0, decks: {}, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, winner: null, log: [] };
+  logStart({ players: logPlayers() });
   store(DRAFT_KEY, draft); saved = null; disp = {}; boardKey = '';
   save(); render();
 }
@@ -779,7 +816,7 @@ const ACT = {
     const t = S.teams[S.cur], n = S.turn.records.filter(r => r.ok).length, from = t.pos;
     (S.log = S.log || []).push({ t: S.cur, d: describer(S.cur), n, f: S.turn.records.filter(r => r.res === 'foul').length });
     if (S.turn.mode === 'final') {
-      if (n > 0) { S.winner = S.cur; S.phase = 'win'; save(); render(); sfx.win(); confetti(); }
+      if (n > 0) { S.winner = S.cur; S.phase = 'win'; save(); render(); sfx.win(); confetti(); gameLog('end', logInfo({ players: logPlayers(), winner: S.teams[S.cur].name })); }
       else { S.phase = 'final-fail'; save(); render(); }
       return;
     }
@@ -811,6 +848,7 @@ const ACT = {
   rematch() {
     S.teams.forEach(t => { t.pos = 0; t.desc = 0; });
     Object.assign(S, { phase: 'idle', cur: 0, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, winner: null, log: [] });
+    logStart({ players: logPlayers(), rematch: 'yes' });
     disp = {}; save(); render();
   },
   setupAgain() { store(SAVE_KEY, null); S = null; render(); }

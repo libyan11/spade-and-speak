@@ -721,10 +721,47 @@ function teamsReady() {
   if (counts.some(c => c < 2)) return { ok: true, warn: 'Some teams have only 1 player, so nobody on that team can guess. 2 or more per team works best.' };
   return { ok: true };
 }
+const LOG_VER = 'online';
+/* ================= PRIVATE GAME LOG (owner only) =================
+   When a game starts and when it ends, one small row goes to the owner's own Google Sheet, which only
+   the owner can open. It's sent in the background after the screen has moved on, so it never slows the
+   game; with no internet it waits on this device (up to 50 rows) and goes with the next one.
+   Nothing is sent while LOG_URL is empty. No player names are sent, only team names and counts. */
+const LOG_URL = '';
+const LOG_KEY = 'sps-log-1';
+function logQ() { try { return JSON.parse(localStorage.getItem('sps-logq') || '[]'); } catch (e) { return []; } }
+function logSave(q) { try { localStorage.setItem('sps-logq', JSON.stringify(q.slice(-50))); } catch (e) {} }
+function gameLog(ev, extra) {
+  if (!LOG_URL) return;
+  try {
+    const dev = matchMedia('(pointer: coarse)').matches ? 'phone/tablet' : 'computer';
+    logSave(logQ().concat([{ k: LOG_KEY, ev, t: Date.now(), ver: LOG_VER, dev, ...extra }]));
+    setTimeout(logFlush, 1500);
+  } catch (e) {}
+}
+function logFlush() {
+  if (!LOG_URL || logFlush.busy || navigator.onLine === false) return;
+  const q = logQ(); if (!q.length) return;
+  logFlush.busy = true;
+  fetch(LOG_URL, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(q[0]) })
+    .then(() => { const r = logQ(); r.shift(); logSave(r); logFlush.busy = false; if (r.length) setTimeout(logFlush, 800); })
+    .catch(() => { logFlush.busy = false; });
+}
+if (LOG_URL) { addEventListener('online', () => setTimeout(logFlush, 2000)); setTimeout(logFlush, 6000); }
+function logInfo(extra) {
+  const right = (S.log || []).reduce((a, e) => a + e.n, 0);
+  return { gid: S.gid || '', words: S.words || 'normal', len: S.len, teams: S.teams.length, names: S.teams.map(t => t.name).join(' / '), turns: (S.log || []).length, right, mins: S.startedAt ? Math.round((Date.now() - S.startedAt) / 6000) / 10 : '', ...extra };
+}
+function logStart(extra) {
+  S.gid = Math.random().toString(36).slice(2, 9); S.startedAt = Date.now();
+  gameLog('start', logInfo(extra));
+}
+function logPlayers() { return S.players.filter(p => p.team != null).length; }
 function startGame() {
   S.teams = Array.from({ length: S.teamCount }, (_, i) => ({ name: S.teamNames[i], color: TEAM_COLORS[i], pos: 0, desc: 0 }));
   S.spaces = buildSpaces(S.len);
   Object.assign(S, { phase: 'idle', cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null, log: [] });
+  logStart({ room: S.code, players: logPlayers() });
 }
 
 /* host timer */
@@ -901,7 +938,7 @@ function handleAct(pid, act, d) {
       if (ph !== 'review' || !isD || tr.records.some(r => r.status === 'challenged')) return;
       const t = S.teams[S.cur], n = tr.records.filter(r => r.ok).length;
       (S.log = S.log || []).push({ t: S.cur, d: nameOf(tr.describer), n, f: tr.records.filter(r => r.res === 'foul').length });
-      if (tr.mode === 'final') { if (n > 0) { S.winner = S.cur; S.phase = 'win'; } else S.phase = 'final-fail'; return; }
+      if (tr.mode === 'final') { if (n > 0) { S.winner = S.cur; S.phase = 'win'; gameLog('end', logInfo({ room: S.code, players: logPlayers(), winner: S.teams[S.cur].name })); } else S.phase = 'final-fail'; return; }
       const { from, to } = moveTeam(S.cur, n);
       S.last = n === 0 ? `${t.name} didn't get any this time.` : `${t.name} got ${n} right and moved to ${posLabel(to)}.`;
       const land = to > from && to < S.len - 1 ? S.spaces[to] : null;
@@ -912,6 +949,7 @@ function handleAct(pid, act, d) {
       if (!host || ph !== 'win') return;
       S.teams.forEach(t => { t.pos = 0; t.desc = 0; });
       Object.assign(S, { phase: 'idle', cur: 0, turn: null, spinner: null, last: null, after: null, anim: null, winner: null, finalCat: null, log: [] });
+      logStart({ room: S.code, players: logPlayers(), rematch: 'yes' });
     },
     chat() {
       const text = String(d.text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
