@@ -213,6 +213,21 @@ input[type="text"] { font: inherit; padding: .62em .8em; border-radius: 12px; bo
 .tally { text-align: right; }
 .tally b { font-family: var(--f-display); font-weight: 400; font-size: 2.4rem; line-height: 1; display: block; font-variant-numeric: tabular-nums; }
 .tally span { color: var(--stage-muted); font-size: .85rem; font-weight: 700; }
+/* full card: one word for every category; the space's category is big, the rest are small underneath.
+   One category on every card carries a ♠: on a spade space that word is the one to describe. */
+.card.full .card-word { min-height: 140px; padding: 20px 16px 14px; }
+.card-rows { list-style: none; margin: 0; padding: 0 12px 12px; display: grid; gap: 4px; }
+.card-rows li { display: block; }
+.cr { display: flex; align-items: center; gap: 10px; width: 100%; padding: 5px 8px; border-radius: 12px; font: inherit; color: inherit; text-align: left; background: none; border: 0; }
+.cr-cat { flex: none; min-width: 5.4em; padding: 2px 8px; border-radius: 999px; background: var(--cat); color: var(--cat-fg); font-family: var(--f-body); font-size: .64rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
+.cr-word { font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
+.card-rows.rest { border-top: 1.5px dashed rgba(31, 27, 63, .16); padding-top: 9px; }
+.card-rows.rest .cr { opacity: .55; font-size: .9rem; padding: 2px 6px; }
+.cr-spade { font-style: normal; flex: none; width: 1.5em; height: 1.5em; border-radius: 50%; display: grid; place-items: center; background: #1F1B3F; color: #fff; font-size: .95rem; line-height: 1; }
+.card.full .card-word { position: relative; }
+.card-spade { position: absolute; top: 10px; right: 12px; font-style: normal; width: 2.1rem; height: 2.1rem; border-radius: 50%; display: grid; place-items: center; background: #1F1B3F; color: #fff; font-family: var(--f-body); font-size: 1.35rem; line-height: 1; }
+.skip-note { border-radius: 14px; padding: 10px 14px; background: var(--stage-line); font-size: .95rem; text-align: center; }
+.skip-note b { color: #FFD66B; }
 .card-stack { position: relative; }
 .card-stack::before { content: ""; position: absolute; inset: 8px -6px -8px 6px; border-radius: 24px; background: var(--card); opacity: .18; transform: rotate(2.5deg); }
 .card { position: relative; background: var(--card); color: var(--card-ink); border-radius: 24px; overflow: hidden; box-shadow: 0 24px 50px -20px rgba(0, 0, 0, .7); }
@@ -651,21 +666,59 @@ function animateLocal(a) {
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 /* words already played in earlier games on this (host) device, so new games don't repeat them */
 function seenWords() { return (LS && getItem(LS, 'sps-seen')) || {}; }
-function draw(cat) {
-  if (cat === 'any') cat = ORDER[Math.floor(Math.random() * ORDER.length)];
+const SEEN_GET = () => seenWords();
+const SEEN_PUT = seen => { LS && setItem(LS, 'sps-seen', seen); };
+/* ---------- cards ----------
+   Like a real deck, every card has one word for each category, and a ♠ next to one of them.
+   On a category space that category's word is the one to describe; on a spade space it's the ♠ word.
+   The word in play is big; the others sit small underneath. Only words that were in play are remembered
+   as used, so the extra words on a card come back in later games. */
+function drawWord(cat, seen) {
   const mode = POOLS[S.words] ? S.words : 'normal', mix = MIX[mode], pool = Math.random() < mix[1] ? mix[0] : mode;
-  const seen = seenWords(), list = POOLS[pool][cat], key = pool + ':' + cat;
+  const list = POOLS[pool][cat], key = pool + ':' + cat;
   if (!S.decks[key] || !S.decks[key].length) {
     const used = new Set(seen[cat] || []);
     let idx = list.map((_, i) => i).filter(i => !used.has(list[i]));
     if (idx.length < 15) { idx = list.map((_, i) => i); seen[cat] = (seen[cat] || []).filter(w => !list.includes(w)); }
     S.decks[key] = shuffle(idx);
   }
-  const word = list[S.decks[key].pop()];
+  return { word: list[S.decks[key].pop()], hard: pool === 'normalHard' };
+}
+function rememberWord(cat, word, seen) {
+  seen = seen || SEEN_GET();
   (seen[cat] = seen[cat] || []).push(word);
-  LS && setItem(LS, 'sps-seen', seen);
+  SEEN_PUT(seen);
+}
+function draw(cat) {
+  const seen = SEEN_GET(), words = {}, hards = {};
+  ORDER.forEach(c => { const w = drawWord(c, seen); words[c] = w.word; if (w.hard) hards[c] = 1; });
+  /* like a real card, every card has a ♠ next to one of its categories (a different one each card);
+     on a spade space, that's the word to describe */
+  const spade = ORDER[Math.floor(Math.random() * ORDER.length)];
+  const active = cat !== 'any' && CAT[cat] ? cat : spade;
+  rememberWord(active, words[active], seen);
+  S.cardSeq = (S.cardSeq || 0) + 1;
   /* in Normal, the odd hard word is flagged on the card */
-  return { cat, word, hard: pool === 'normalHard' };
+  return { id: S.cardSeq, cat: active, spade, word: words[active], words, hards, hard: !!hards[active] };
+}
+/* what a card is called in the turn summary when it wasn't guessed */
+function cardLabel(c) { return !c ? '' : c.word || ''; }
+function cardBand(card, fin, turnCat) {
+  const cc = card && card.cat;
+  if (fin) return 'Final · ' + (CAT[cc] || '');
+  return (turnCat === 'any' ? '♠ Spade · ' : '') + (CAT[cc] || '') + (card && card.hard ? ' · ★ Hard' : '');
+}
+function fullCardHTML(card, o) {
+  const cat = card && card.cat || 'object';
+  const words = card && (card.words || (card.word ? { [card.cat]: card.word } : null));
+  const head = `<div class="card-band"><span>${o.band}</span><span>${o.right}</span></div>`;
+  if (o.paused || !words || !words[cat]) return `<div class="card-stack"><div class="card full cat-${cat} paused">${head}<div class="card-word">${o.paused ? 'Paused' : '…'}</div></div></div>`;
+  const sp = c => card.spade === c ? '<i class="cr-spade" title="Spade word">♠</i>' : '';
+  const rest = ORDER.filter(c => c !== cat && words[c]);
+  return `<div class="card-stack"><div class="card full cat-${cat}">${head}`
+    + `<div class="card-word" dir="auto">${card.spade === cat ? '<i class="card-spade" title="Spade word">♠</i>' : ''}${esc(words[cat])}</div>`
+    + (rest.length ? `<ul class="card-rows rest" aria-label="Other words on this card">${rest.map(c => `<li class="cat-${c}"><div class="cr"><span class="cr-cat">${CAT[c]}</span>${sp(c)}<span class="cr-word" dir="auto">${esc(words[c])}</span></div></li>`).join('')}</ul>` : '')
+    + `</div></div>`;
 }
 function newTurn(mode, cat, describer) {
   Object.values(S.decks).forEach(shuffle);   // fresh random order at the start of every turn
@@ -787,8 +840,8 @@ function remaining() {
 function onTimeUp() {
   const tr = S.turn;
   if (tr.mode === 'final') { S.phase = 'final-fail'; broadcast(); return; }
-  if (tr.parked) tr.records.push({ word: tr.parked.word, res: 'skipped', ok: false });
-  if (tr.card) tr.records.push({ word: tr.card.word, res: 'timeout', ok: false });
+  if (tr.parked) tr.records.push({ word: cardLabel(tr.parked), res: 'skipped', ok: false });
+  if (tr.card) tr.records.push({ word: cardLabel(tr.card), res: 'timeout', ok: false });
   tr.card = null; tr.parked = null;
   S.phase = 'review'; broadcast();
 }
@@ -872,8 +925,9 @@ function handleAct(pid, act, d) {
     },
     got() {
       if (ph !== 'play' || !isD || tr.paused) return;
+      const word = tr.card.word;
       const fb = tr.card.foulBy || null;
-      tr.records.push({ word: tr.card.word, res: 'correct', ok: true, foulBy: fb, status: fb ? 'challenged' : null });
+      tr.records.push({ word, res: 'correct', ok: true, foulBy: fb, status: fb ? 'challenged' : null });
       /* the final card goes to review too, so the other teams get a chance to challenge it */
       if (tr.mode === 'final') { hostStopTimer(); ht.onEnd = null; tr.card = null; tr.parked = null; S.phase = 'review'; return; }
       tr.card = draw(tr.cat);
@@ -922,7 +976,7 @@ function handleAct(pid, act, d) {
     },
     foul() {
       if (ph !== 'play' || !isD || tr.paused) return;
-      tr.records.push({ word: tr.card.word, res: 'foul', ok: false });
+      tr.records.push({ word: cardLabel(tr.card), res: 'foul', ok: false });
       tr.card = draw(tr.cat);
     },
     pause() {
@@ -954,10 +1008,10 @@ function handleAct(pid, act, d) {
     chat() {
       const text = String(d.text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
       if (!text) return;
-      const w = tr && tr.card && tr.card.word;
+      const ws = tr && tr.card ? [tr.card.word] : [];
       S.chat = S.chat || []; S.chatSeq = (S.chatSeq || 0) + 1;
       /* don't let anyone who can see the card type the word to the guessers */
-      if (w && ph === 'play' && canSeeWord(pid) && text.toLowerCase().includes(String(w).toLowerCase()))
+      if (ph === 'play' && canSeeWord(pid) && ws.some(w => w && text.toLowerCase().includes(String(w).toLowerCase())))
         S.chat.push({ id: S.chatSeq, sys: true, text: `${p.name}'s message was hidden because it had the word in it.` });
       else S.chat.push({ id: S.chatSeq, pid, name: p.name, team: p.team, text });
       if (S.chat.length > 40) S.chat.splice(0, S.chat.length - 40);
@@ -984,8 +1038,7 @@ function publicState(pid) {
   const v = JSON.parse(JSON.stringify(S));
   delete v.decks;
   if (v.turn && !canSeeWord(pid)) {
-    if (v.turn.card) v.turn.card.word = null;
-    if (v.turn.parked) v.turn.parked.word = null;
+    [v.turn.card, v.turn.parked].forEach(c => { if (c) { c.word = null; c.words = null; c.hards = null; } });
   }
   return v;
 }
@@ -1673,6 +1726,7 @@ function effects(prev, v) {
     const r = nr.records[nr.records.length - 1];
     r.res === 'correct' ? sfx.ok() : r.res === 'foul' ? sfx.foul() : sfx.skip();
   } else if (pr && nr && !pr.parked && nr.parked) sfx.skip();
+  else if (pr && nr && pr.parked && nr.parked && pr.card && nr.card && pr.card.id !== nr.card.id) sfx.skip();
   else if (pr && nr && v.phase === 'play' && nr.card && nr.card.foulBy && !(pr.card && pr.card.foulBy)) sfx.flag();
   if (pr && nr && v.phase === 'review' && nr.records.some((r, i) => r.status === 'challenged' && !(pr.records[i] && pr.records[i].status))) sfx.flag();
   if (v.phase !== prev.phase) {
@@ -1869,12 +1923,15 @@ const STAGE = {
     const dName = esc(nameOf(tr.describer, v));
     const top = `<div class="play-top">${timerHTML()}<div class="tally">${fin ? '<b>1</b><span>to win</span>' : `<b>${got}</b><span>correct</span>`}</div></div>`;
     const cc = tr.card && tr.card.cat || tr.cat;
-    const band = (fin ? 'Final · ' : tr.cat === 'any' ? '♠ Any · ' : '') + CAT[cc] + (tr.card && tr.card.hard ? ' · ★ Hard' : '');
+    const band = cardBand(tr.card, fin, tr.cat);
+    /* teammates can't see the words, but they can see when a word was skipped */
+    const skipNote = tr.parked ? `<div class="skip-note">⏭ <b>${dName} skipped a word.</b> It's waiting on the side, and they can go back to it.</div>`
+      : `<div class="skip-note">${dName} ${tr.skipUsed ? 'has used their skip.' : "hasn't skipped yet (1 skip this turn)."}</div>`;
     const fb = tr.card && tr.card.foulBy;
     const note = tr.note ? `<div class="foul-banner">${esc(tr.note)}</div>` : '';
     if (isD) {
       return `<div class="stage-inner">${top}${note}
-        ${cardHTML(cc, tr.paused ? 'Paused' : esc(tr.card.word), band, esc(t.name), tr.paused ? 'paused' : '')}
+        ${fullCardHTML(tr.card, { band, right: esc(t.name), paused: tr.paused })}
         ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))} called foul</b> on this card. If you did say the word or part of it, tap "Said the word". If you didn't, keep going: the host decides after the turn.</div>` : ''}
         <div class="parked">${tr.parked
           ? `<span>Skipped: <b>${tr.paused ? '•••' : esc(tr.parked.word)}</b></span><span class="small-hint">Go back any time. This card waits here instead.</span>`
@@ -1894,8 +1951,9 @@ const STAGE = {
     }
     if (mine === v.cur) {
       return `<div class="stage-inner">${top}${note}
-        <div class="guess cat-${tr.cat}"><b>${tr.paused ? 'Paused' : 'Guess!'}</b><span>${dName} is describing ${tr.cat === 'any' ? 'words from any category' : `${fin ? 'the final' : tr.cat === 'object' || tr.cat === 'action' ? 'an' : 'a'} ${CAT[tr.cat]} word`}</span></div>
+        <div class="guess cat-${tr.cat}"><b>${tr.paused ? 'Paused' : 'Guess!'}</b><span>${dName} is describing ${tr.cat === 'any' ? 'the ♠ word on each card (any category)' : `${fin ? 'the final' : tr.cat === 'object' || tr.cat === 'action' ? 'an' : 'a'} ${CAT[tr.cat]} word`}</span></div>
         <p class="sub">Shout your answers out loud${fin ? '. One right answer wins the game!' : '. Every right answer moves your team one space.'}</p>
+        ${fin ? '' : skipNote}
         ${fb ? `<div class="foul-banner">🚩 <b>${esc(who(fb, v))}</b> called foul on this card. The host decides after the turn.</div>` : ''}
         ${host ? `<div class="row"><button class="link" data-act="pause">${tr.paused ? 'Resume' : 'Pause'}</button></div>` : ''}
       </div>`;
@@ -1906,7 +1964,8 @@ const STAGE = {
     </div>`;
     return `<div class="stage-inner">${top}${note}
       <p class="eyebrow">${esc(t.name)} is playing · ${dName} describes</p>
-      ${cardHTML(cc, tr.paused ? 'Paused' : esc(tr.card.word), band, 'You can see it', tr.paused ? 'paused' : '')}
+      ${fullCardHTML(tr.card, { band, right: 'You can see it', paused: tr.paused })}
+      ${tr.parked && !fin ? skipNote : ''}
       <div class="note">You're on another team, so you can see the word. <b>Keep quiet</b> and listen. If ${dName} says the word or part of it, call a foul. You can also challenge any card after the turn.</div>
       ${mine == null ? '' : fb
         ? `<button class="btn btn-foul btn-lg" disabled>🚩 Foul called by ${esc(nameOf(fb, v))}</button>`
@@ -2022,7 +2081,7 @@ function renderStage(v) {
   const focusAct = document.activeElement && st.contains(document.activeElement) ? document.activeElement.dataset.act : null;
   st.innerHTML = STAGE[ph](v);
   const card = st.querySelector('.card');
-  const cardKey = ph + ':' + (v.turn && v.turn.card ? v.turn.card.word : '');
+  const cardKey = ph + ':' + (v.turn && v.turn.card ? v.turn.card.id || v.turn.card.word : '');
   if (card && cardKey !== lastCardKey) card.classList.add('deal');
   lastCardKey = cardKey;
   if (ph === 'play') {
@@ -2074,7 +2133,7 @@ function openRules() {
       <li><b>Only the host decides.</b> On a challenged card the host taps Foul (the card doesn't count) or Fair (it counts). The host can also rule any counted card a foul without a challenge.</li>
       <li>The final card can be challenged too, before the win counts.</li>
     </ul></section>
-    <section><h3>Spades ♠</h3><p>A spade space has no single category. When your turn starts on one, every card can come from any category. It's a normal turn, not an extra go.</p></section>
+    <section><h3>Spades ♠</h3><p>Every card has a word for each category, and a ♠ next to one of them (it changes from card to card). When your turn starts on a spade space, describe the ♠ word on each card. It's a normal turn, not an extra go.</p></section>
     <section><h3>Word level</h3><p><b>Normal</b>: everyday words, with a harder one now and then (marked ★ Hard). <b>Hard</b>: harder words, with an everyday one now and then. <b>Hardest</b>: the toughest words, with some hard ones mixed in. Action words are always one word. <b>عربي Arabic</b>: every card is in Arabic, using only well-known places, people, food and everyday things.</p></section>
     <section><h3>Spinners</h3><p>End your turn on a spinner space (the red and green circle) and your team spins the wheel: +1, +2, −1 or −2. Then you choose any team to move by that amount: your own team, or a team you want to slow down. Moving because of the spinner doesn't set off another spade or spinner.</p></section>
     <section><h3>Winning</h3><p>Reaching the finish isn't enough. On your next turn, the other teams choose a category and you must get 1 card right before the time runs out. Miss it and try again next turn. The first team to pass the final challenge wins.</p></section>
