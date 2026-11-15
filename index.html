@@ -302,7 +302,7 @@ button.rv { cursor: pointer; }
 .chat-btn { position: relative; }
 .chat-btn .badge { position: absolute; top: -4px; right: -4px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px; background: var(--bad); color: #fff; font-size: .7rem; font-style: normal; font-weight: 800; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--surface); }
 .chat-btn.open { background: var(--accent); color: var(--on-accent); box-shadow: none; }
-.chat, .chat-toast {
+.chat, .chat-feed {
   position: fixed; z-index: 71; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 72px);
   width: min(420px, calc(100vw - 24px)); background: var(--surface); color: var(--ink);
   box-shadow: 0 12px 36px var(--shadow), inset 0 0 0 1.5px var(--line);
@@ -325,8 +325,19 @@ button.rv { cursor: pointer; }
 .chat-form { display: flex; gap: 8px; padding: 8px 10px 10px; }
 .chat-form input { border-radius: 999px; }
 .chat-form .btn { border-radius: 999px; }
-.chat-toast { border-radius: 16px; padding: 10px 14px; font-size: .92rem; cursor: pointer; text-align: left; border: 0; font-family: inherit; overflow-wrap: anywhere; }
-.chat-toast b { color: var(--accent); margin-right: 4px; }
+.chat-feed { background: none; box-shadow: none; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; pointer-events: none; }
+.chat-feed[hidden] { display: none; }
+.bubble {
+  max-width: 100%; background: var(--surface); color: var(--ink); border-radius: 16px 16px 16px 5px; padding: 8px 13px; font-size: .95rem; line-height: 1.3;
+  box-shadow: 0 6px 20px var(--shadow), inset 0 0 0 1.5px var(--line); overflow-wrap: anywhere;
+  animation: bubbleIn .18s ease-out; transition: opacity .35s, transform .35s; will-change: opacity, transform;
+}
+.bubble b { color: var(--who, var(--accent)); margin-right: 5px; }
+.bubble.big { font-size: 1.7rem; line-height: 1.1; padding: 4px 10px; }
+.bubble.sys { color: var(--muted); font-size: .86rem; }
+.bubble.out { opacity: 0; transform: translateY(6px); }
+@keyframes bubbleIn { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .bubble { animation: none; transition: none; } }
 body.has-call #app { padding-bottom: 104px; }
 body.has-call #stage { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); }
 
@@ -380,7 +391,7 @@ body.has-call #stage { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8
   </div>
   <form id="chatForm" class="chat-form" autocomplete="off"><input type="text" id="chatInput" maxlength="200" placeholder="Message" aria-label="Message"><button class="btn btn-primary" type="submit">Send</button></form>
 </div>
-<button id="chatToast" class="chat-toast" data-act="chatOpen" hidden></button>
+<div id="chatFeed" class="chat-feed" aria-live="polite"></div>
 
 <script>
 const ORDER = ['object', 'action', 'world', 'person', 'random', 'nature'];
@@ -480,7 +491,13 @@ const LS = (() => { try { return window.localStorage; } catch (e) { return null;
 const SS = (() => { try { return window.sessionStorage; } catch (e) { return null; } })();
 function myId() {
   let id = SS && getItem(SS, 'sps-id');
+  /* A tab opened from this page (an invite link clicked on a PC, a duplicated tab) gets a copy of sessionStorage,
+     so it would come in as the same player and be turned away. window.name stays with its own tab,
+     so if it doesn't carry our id, this is a different tab and gets its own player. */
+  const tag = 'sps-tab:';
+  if (id && window.name !== tag + id) id = null;
   if (!id) { id = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6); SS && setItem(SS, 'sps-id', id); }
+  try { window.name = tag + id; } catch (e) {}
   return id;
 }
 
@@ -1282,6 +1299,13 @@ function vcNewPC(vid, pid, initiator) {
   };
   return rec;
 }
+/* headphones plugged in / Bluetooth connected during a call: re-attach each voice so the browser
+   sends it to the new output instead of staying on the speaker */
+function vcReroute() {
+  vc.calls.forEach(r => { if (r.el && r.stream) { r.el.srcObject = null; r.el.srcObject = r.stream; r.el.play().catch(() => {}); } });
+}
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => { if (vc.on) setTimeout(vcReroute, 400); });
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
 function vcOffer(vid, pid) {
   const rec = vcNewPC(vid, pid, true);
   rec.pc.createOffer()
@@ -1309,6 +1333,10 @@ async function vcJoin() {
   clearInterval(vc.iv); vc.iv = setInterval(vcSync, 2500);
   clearInterval(vc.miv); vc.miv = setInterval(vcMeterTick, 120);
   vcAnnounce(); vcSync();
+  if (IS_ANDROID && !(LS && getItem(LS, 'sps-bt-tip'))) {
+    LS && setItem(LS, 'sps-bt-tip', 1);
+    chatBubble({ sys: true, text: '🎧 Bluetooth headphones but the voice comes from the phone speaker? In Android Settings › Apps › Chrome › Permissions, allow "Nearby devices", then rejoin the call.' }, 14000);
+  }
 }
 function vcDrop(vid, quiet) {
   const rec = vc.calls.get(vid); if (!rec) return;
@@ -1378,20 +1406,24 @@ function vcMeterTick() {
 /* ================= CHAT =================
    Messages go to the host like any other move and come back in the game state (last 40 kept),
    so chat works over both the direct link and the relay. */
-const chat = { open: false, seen: 0, lastId: -1, toastT: 0 };
+const chat = { open: false, seen: 0, lastId: -1 };
 ICON.chat = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></svg>';
 function chatMsgs(v) { return ((v || view()) || {}).chat || []; }
 function chatUnread(v) { return chatMsgs(v).filter(m => m.id > chat.seen && m.pid !== me).length; }
 function renderChat(v) {
   const panel = $('#chatPanel');
-  if (!role || !v) { panel.hidden = true; $('#chatToast').hidden = true; chat.open = false; chat.lastId = -1; chat.seen = 0; return; }
+  const feed = $('#chatFeed');
+  if (!role || !v) { panel.hidden = true; feed.hidden = true; feed.innerHTML = ''; chat.open = false; chat.lastId = -1; chat.seen = 0; return; }
+  /* the describer is busy during their turn: their messages wait behind the badge so nothing covers the card */
+  const busy = v.phase === 'play' && v.turn && v.turn.describer === me;
+  feed.hidden = chat.open || busy;
   const msgs = chatMsgs(v), newest = msgs.length ? msgs[msgs.length - 1].id : 0;
   if (chat.lastId === -1) { chat.lastId = chat.seen = newest; }
   if (newest !== chat.lastId) {
     const fresh = msgs.filter(m => m.id > chat.lastId && m.pid !== me);
     chat.lastId = newest;
     if (chat.open) { chat.seen = newest; paintMessages(); }
-    else if (fresh.length) { chatToast(fresh[fresh.length - 1], v); sfx.chat(); }
+    else if (fresh.length) { if (!busy) fresh.slice(-3).forEach(m => chatBubble(m)); sfx.chat(); }
   }
   panel.hidden = !chat.open;
 }
@@ -1406,11 +1438,16 @@ function paintMessages(force) {
     : '<p class="msg sys">No messages yet. Say hi!</p>';
   if (atBottom || force) log.scrollTop = log.scrollHeight;
 }
-function chatToast(m) {
-  const t = $('#chatToast');
-  t.innerHTML = m.sys ? esc(m.text) : `<b>${esc(m.name)}</b>${esc(m.text)}`;
-  t.hidden = false;
-  clearTimeout(chat.toastT); chat.toastT = setTimeout(() => { t.hidden = true; }, 4000);
+/* new messages pop up above the call bar for a few seconds (up to 3 at once); they never block taps */
+function chatBubble(m, ms = 7000) {
+  const feed = $('#chatFeed'), b = document.createElement('div');
+  b.className = 'bubble' + (m.sys ? ' sys' : '') + (!m.sys && isEmojiOnly(m.text) ? ' big' : '');
+  if (!m.sys && teamCol(m.team)) b.style.setProperty('--who', teamCol(m.team));
+  b.setAttribute('dir', 'auto');
+  b.innerHTML = m.sys ? esc(m.text) : `<b>${esc(m.name)}</b>${esc(m.text)}`;
+  feed.appendChild(b);
+  while (feed.children.length > 3) feed.firstElementChild.remove();
+  setTimeout(() => { b.classList.add('out'); setTimeout(() => b.remove(), 400); }, ms);
 }
 function chatBtnHTML(v) {
   const n = chatUnread(v);
@@ -1961,11 +1998,11 @@ const UI = {
   },
   chatToggle() { chat.open ? UI.chatClose() : UI.chatOpen(); },
   chatOpen() {
-    chat.open = true; chat.seen = chat.lastId; $('#chatToast').hidden = true;
+    chat.open = true; chat.seen = chat.lastId; $('#chatFeed').hidden = true; $('#chatFeed').innerHTML = '';
     $('#chatPanel').hidden = false; paintMessages(true); renderCall();
     if (matchMedia('(hover: hover)').matches) $('#chatInput').focus();
   },
-  chatClose() { chat.open = false; $('#chatPanel').hidden = true; renderCall(); },
+  chatClose() { chat.open = false; $('#chatPanel').hidden = true; renderCall(); renderChat(view()); },
   chatSend() {
     const i = $('#chatInput'), t = i.value.trim();
     if (!t) return;
