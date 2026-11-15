@@ -1035,6 +1035,7 @@ function hostReceive(c, m) {
     broadcast(); return;
   }
   if (m.t === 'act' && c.pid) handleAct(c.pid, String(m.act), m.data);
+  else if (m.t === 'sig' && c.pid) hostRouteSig(c.pid, m);
 }
 function hostDrop(c) {
   if (!conns.has(c)) return;
@@ -1114,6 +1115,7 @@ function relayHostConn() { return { relay: true, open: true, send: m => relaySen
 function guestRelayMsg(m) {
   if (role !== 'guest' || !m) return;
   lastHostMsg = Date.now();
+  if (m.t === 'sig') { vcOnSig(m); return; }
   if (m.t !== 'state') return;
   if (link !== 'peer' && link !== 'relay') { hostConn = relayHostConn(); linked('relay'); }
   else if (link === 'relay') setNet('In room ' + roomCode + ' · backup link', 'ok');
@@ -1134,7 +1136,7 @@ function connectHost() {
     c.send({ t: 'hello', cid: me, name: myName });
     linked('peer');
   });
-  c.on('data', m => { if (link === 'peer' && hostConn === c) guestState(m); });
+  c.on('data', m => { if (m && m.t === 'sig') vcOnSig(m); else if (link === 'peer' && hostConn === c) guestState(m); });
   c.on('close', () => {
     if (role === 'guest' && hostConn === c) {
       link = null; hostConn = null;
@@ -1179,18 +1181,19 @@ function leave(msg) {
 }
 
 /* ================= VOICE CALL =================
-   Anyone in the room can join a voice call. Every pair of phones in the call is linked directly (WebRTC via
-   PeerJS, which falls back to its TURN servers when a direct path is blocked). Who is in the call, their call
-   id and mute state travel in the game state, so this works whichever way the game itself is connected.
-   For each pair, the phone whose call id sorts lower places the call; the other answers. */
-const vc = { on: false, joining: false, mute: false, stream: null, peer: null, vid: '', calls: new Map(), retry: new Map(), fails: new Map(), meters: new Map(), note: '', needTap: false, iv: 0, miv: 0, lastAnn: 0 };
-/* Servers that help two phones find each other. STUN works on most home Wi-Fi and many mobile networks.
-   Networks that block direct links (some 5G, school and work Wi-Fi) also need a TURN relay: put its
-   address and login in VOICE_TURN, e.g. { urls: ['turn:host:80', 'turns:host:443?transport=tcp'], username: '…', credential: '…' }.
-   (The TURN servers built into PeerJS were shut down.) */
-const VOICE_TURN = [];
-const VOICE_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }, ...VOICE_TURN];
-function vcLive(rec) { const s = rec && rec.mc.peerConnection && rec.mc.peerConnection.iceConnectionState; return !!rec && !!rec.stream && (s === 'connected' || s === 'completed'); }
+   Anyone in the room can join a voice call. Every pair of phones in the call gets its own WebRTC audio link.
+   Setting a link up (offer/answer) goes through the game's own connection, via the host, so it works
+   whenever the game works, including over the backup relay. The audio itself goes phone to phone, or
+   through the TURN relay below when a network blocks direct links.
+   Who is in the call, their call id and mute state travel in the game state. For each pair, the phone whose
+   call id sorts lower sends the offer; the other answers. */
+const vc = { on: false, joining: false, mute: false, stream: null, vid: '', calls: new Map(), retry: new Map(), fails: new Map(), meters: new Map(), sigSeen: new Set(), note: '', needTap: false, iv: 0, miv: 0, lastAnn: 0 };
+/* STUN lets phones find a direct path; the TURN relay (ExpressTURN free plan, UDP and TCP on port 3478)
+   carries the audio when a network blocks direct links (5G, mobile data, some Wi-Fi).
+   If calls stop connecting on mobile data, the login may have been refreshed on expressturn.com: paste the new one here. */
+const VOICE_TURN = [{ urls: ['turn:free.expressturn.com:3478', 'turn:free.expressturn.com:3478?transport=tcp'], username: '000000002110095708', credential: 'fuWuUCuGgd/joDK6kMekIiLsYc0=' }];
+const VOICE_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }, ...VOICE_TURN];
+function vcLive(rec) { const s = rec && rec.pc.iceConnectionState; return !!rec && !!rec.stream && (s === 'connected' || s === 'completed'); }
 const ICON = {
   phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>',
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
@@ -1206,12 +1209,92 @@ function vcAnnounce() {
   doAct('voice', vc.on && vc.vid ? { on: true, vid: vc.vid, mute: vc.mute } : { on: false });
 }
 function vcNote(t) { vc.note = t; renderCall(); }
+function rid() { return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 8); }
+
+/* --- signalling through the game connection --- */
+function vcSend(toPid, m) {
+  const msg = { t: 'sig', id: rid(), to: toPid, fv: vc.vid, ...m };
+  if (role === 'host') hostRouteSig(me, msg);
+  else if (hostConn && hostConn.open) { try { hostConn.send(msg); } catch (e) {} }
+}
+/* host: pass a call message on to the player it is for (on every link they have open) */
+function hostRouteSig(fromPid, m) {
+  if (!m || typeof m.to !== 'string') return;
+  const out = { t: 'sig', id: String(m.id || rid()).slice(0, 40), from: fromPid, fv: m.fv, tv: m.tv, kind: m.kind, sdp: m.sdp, cand: m.cand };
+  if (m.to === me) { vcOnSig(out); return; }
+  conns.forEach(c => { if (c.open && c.pid === m.to) { try { c.send(out); } catch (e) {} } });
+}
+function vcOnSig(m) {
+  if (!m || !m.id || vc.sigSeen.has(m.id)) return;
+  vc.sigSeen.add(m.id);
+  if (vc.sigSeen.size > 400) vc.sigSeen.delete(vc.sigSeen.values().next().value);
+  if (!vc.on || !vc.stream || m.tv !== vc.vid || typeof m.fv !== 'string') return;
+  let rec = vc.calls.get(m.fv);
+  if (m.kind === 'offer') {
+    if (rec) vcDrop(m.fv, true);
+    rec = vcNewPC(m.fv, m.from, false);
+    rec.pc.setRemoteDescription({ type: 'offer', sdp: m.sdp })
+      .then(() => { vcFlushCands(rec); return rec.pc.createAnswer(); })
+      .then(a => rec.pc.setLocalDescription(a))
+      .then(() => vcGathered(rec.pc))
+      .then(() => { if (vc.calls.get(m.fv) !== rec) return; vcSend(rec.pid, { tv: m.fv, kind: 'answer', sdp: rec.pc.localDescription.sdp }); rec.sent = true; })
+      .catch(() => vcDrop(m.fv));
+    renderCall();
+  } else if (m.kind === 'answer') {
+    if (!rec || rec.pc.signalingState !== 'have-local-offer') return;
+    rec.pc.setRemoteDescription({ type: 'answer', sdp: m.sdp }).then(() => vcFlushCands(rec)).catch(() => vcDrop(m.fv));
+  } else if (m.kind === 'ice' && rec && m.cand) {
+    if (rec.pc.remoteDescription) rec.pc.addIceCandidate(m.cand).catch(() => {});
+    else rec.cands.push(m.cand);
+  }
+}
+function vcFlushCands(rec) { rec.cands.splice(0).forEach(c => rec.pc.addIceCandidate(c).catch(() => {})); }
+/* wait (briefly) for the phone to collect its connection options, so one message carries them all */
+function vcGathered(pc) {
+  return new Promise(res => {
+    if (pc.iceGatheringState === 'complete') return res();
+    const t = setTimeout(res, 2500);
+    pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
+  });
+}
+function vcNewPC(vid, pid, initiator) {
+  const pc = new RTCPeerConnection({ iceServers: VOICE_ICE });
+  const rec = { pc, pid, initiator, at: Date.now(), stream: null, el: null, everLive: false, sent: false, cands: [] };
+  vc.calls.set(vid, rec);
+  vc.stream.getTracks().forEach(t => pc.addTrack(t, vc.stream));
+  /* options found after the first message go across one by one */
+  pc.onicecandidate = e => { if (e.candidate && rec.sent && vc.calls.get(vid) === rec) vcSend(pid, { tv: vid, kind: 'ice', cand: e.candidate.toJSON() }); };
+  pc.ontrack = e => {
+    if (vc.calls.get(vid) !== rec) return;
+    const st = e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track]);
+    if (rec.stream === st) return;
+    rec.stream = st;
+    if (!rec.el) { rec.el = document.createElement('audio'); rec.el.autoplay = true; rec.el.setAttribute('playsinline', ''); $('#vcAudio').appendChild(rec.el); }
+    rec.el.srcObject = st;
+    rec.el.play().catch(() => { vc.needTap = true; renderCall(); });
+    vcUnmeter(vid); vcMeter(vid, st);
+    renderCall();
+  };
+  pc.oniceconnectionstatechange = () => {
+    if (vc.calls.get(vid) !== rec) return;
+    if (vcLive(rec)) { rec.everLive = true; vc.fails.delete(vid); }
+    renderCall();
+  };
+  return rec;
+}
+function vcOffer(vid, pid) {
+  const rec = vcNewPC(vid, pid, true);
+  rec.pc.createOffer()
+    .then(o => rec.pc.setLocalDescription(o))
+    .then(() => vcGathered(rec.pc))
+    .then(() => { if (vc.calls.get(vid) !== rec) return; vcSend(pid, { tv: vid, kind: 'offer', sdp: rec.pc.localDescription.sdp }); rec.sent = true; })
+    .catch(() => vcDrop(vid));
+}
 
 async function vcJoin() {
   if (vc.on || vc.joining || !role) return;
   vc.note = '';
-  if (typeof Peer === 'undefined') { vcNote("Calls couldn't load. Check your internet and reload."); return; }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { vcNote("This browser can't use the microphone here."); return; }
+  if (typeof RTCPeerConnection === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { vcNote("This browser can't do calls here."); return; }
   vc.joining = true; renderCall();
   try {
     vc.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
@@ -1221,93 +1304,45 @@ async function vcJoin() {
     return;
   }
   if (!role) { vcStop(true); return; }
-  vc.mute = false;
-  const pr = new Peer({ debug: 1, config: { iceServers: VOICE_ICE, sdpSemantics: 'unified-plan' } });
-  vc.peer = pr;
-  pr.on('open', id => {
-    if (vc.peer !== pr) return;
-    vc.vid = id; vc.on = true; vc.joining = false;
-    vcMeter('me', vc.stream);
-    clearInterval(vc.iv); vc.iv = setInterval(vcSync, 2500);
-    clearInterval(vc.miv); vc.miv = setInterval(vcMeterTick, 120);
-    vcAnnounce(); vcSync();
-  });
-  pr.on('call', mc => {
-    if (vc.peer !== pr || !vc.on || !vc.stream) { try { mc.close(); } catch (e) {} return; }
-    if (vc.calls.has(mc.peer)) vcDrop(mc.peer, true);
-    mc.answer(vc.stream);
-    vcWatch(mc);
-    renderCall();
-  });
-  pr.on('disconnected', () => setTimeout(() => { try { if (vc.peer === pr && !pr.destroyed) pr.reconnect(); } catch (e) {} }, 1500));
-  pr.on('error', e => {
-    if (vc.peer !== pr || e.type === 'peer-unavailable') return; /* someone left; vcSync tidies up */
-    if (!vc.on) { vcStop(true); vcNote("Couldn't start the call (" + e.type + '). Try again.'); }
-  });
-}
-function vcWatch(mc) {
-  const rec = { mc, at: Date.now(), stream: null, el: null, hooked: false };
-  vc.calls.set(mc.peer, rec);
-  vcHook(rec);
-  mc.on('stream', st => {
-    if (vc.calls.get(mc.peer) !== rec || rec.stream === st) return;
-    vcHook(rec);
-    rec.stream = st;
-    if (!rec.el) { rec.el = document.createElement('audio'); rec.el.autoplay = true; rec.el.setAttribute('playsinline', ''); $('#vcAudio').appendChild(rec.el); }
-    rec.el.srcObject = st;
-    rec.el.play().catch(() => { vc.needTap = true; renderCall(); });
-    vcUnmeter(mc.peer); vcMeter(mc.peer, st);
-    renderCall();
-  });
-  const gone = () => { if (vc.calls.get(mc.peer) === rec) vcDrop(mc.peer); };
-  mc.on('close', gone); mc.on('error', gone);
-}
-/* repaint the moment a link really connects (or breaks) */
-function vcHook(rec) {
-  const pc = rec.mc.peerConnection;
-  if (rec.hooked || !pc) return;
-  rec.hooked = true;
-  pc.addEventListener('iceconnectionstatechange', () => {
-    if (vc.calls.get(rec.mc.peer) !== rec) return;
-    if (vcLive(rec)) vc.fails.delete(rec.mc.peer);
-    renderCall();
-  });
+  Object.assign(vc, { vid: rid(), on: true, joining: false, mute: false });
+  vcMeter('me', vc.stream);
+  clearInterval(vc.iv); vc.iv = setInterval(vcSync, 2500);
+  clearInterval(vc.miv); vc.miv = setInterval(vcMeterTick, 120);
+  vcAnnounce(); vcSync();
 }
 function vcDrop(vid, quiet) {
   const rec = vc.calls.get(vid); if (!rec) return;
   vc.calls.delete(vid);
-  try { rec.mc.close(); } catch (e) {}
+  try { rec.pc.close(); } catch (e) {}
   if (rec.el) { rec.el.srcObject = null; rec.el.remove(); }
   vcUnmeter(vid);
   vc.retry.set(vid, Date.now());
   if (!quiet) renderCall();
 }
 function vcSync() {
-  if (!vc.on || !vc.peer || vc.peer.destroyed) { renderCall(); return; }
+  if (!vc.on) { renderCall(); return; }
   const v = view();
   const mine = v && v.players.find(p => p.id === me);
   /* make sure the host has our current call details (a message can be lost while reconnecting) */
   if (mine && (!mine.call || mine.call.vid !== vc.vid || mine.call.mute !== vc.mute) && Date.now() - vc.lastAnn > 3000) vcAnnounce();
-  const want = new Set(vcMembers(v).filter(p => p.id !== me && p.call.vid !== vc.vid).map(p => p.call.vid));
+  const others = vcMembers(v).filter(p => p.id !== me && p.call.vid !== vc.vid);
+  const want = new Map(others.map(p => [p.call.vid, p.id]));
   const now = Date.now();
   [...vc.calls.keys()].forEach(vid => {
-    const rec = vc.calls.get(vid), st = rec.mc.peerConnection && rec.mc.peerConnection.iceConnectionState;
-    vcHook(rec);
+    const rec = vc.calls.get(vid), st = rec.pc.iceConnectionState;
     if (!want.has(vid)) { vcDrop(vid, true); return; }
-    if (rec.everLive || vcLive(rec)) { rec.everLive = true; }
-    if ((!rec.everLive && now - rec.at > 15000) || st === 'failed' || st === 'closed') {
+    if (vcLive(rec)) rec.everLive = true;
+    if ((!rec.everLive && now - rec.at > 20000) || st === 'failed' || st === 'closed') {
       vc.fails.set(vid, (vc.fails.get(vid) || 0) + 1);
       vcDrop(vid, true);
     }
   });
   [...vc.fails.keys()].forEach(vid => { if (!want.has(vid)) vc.fails.delete(vid); });
-  if (!vc.peer.disconnected) {
-    want.forEach(vid => {
-      if (vc.calls.has(vid) || vc.vid > vid || now - (vc.retry.get(vid) || 0) < 4000) return;
-      let mc = null; try { mc = vc.peer.call(vid, vc.stream); } catch (e) {}
-      if (mc) vcWatch(mc);
-    });
-  }
+  want.forEach((pid, vid) => {
+    if (vc.calls.has(vid) || vc.vid > vid || now - (vc.retry.get(vid) || 0) < 4000) return;
+    if (role === 'guest' && !(hostConn && hostConn.open)) return;
+    vcOffer(vid, pid);
+  });
   renderCall();
 }
 function vcStop(silent) {
@@ -1316,8 +1351,7 @@ function vcStop(silent) {
   [...vc.calls.keys()].forEach(vid => vcDrop(vid, true));
   [...vc.meters.keys()].forEach(vcUnmeter);
   if (vc.stream) vc.stream.getTracks().forEach(t => t.stop());
-  try { vc.peer && vc.peer.destroy(); } catch (e) {}
-  Object.assign(vc, { on: false, joining: false, mute: false, stream: null, peer: null, vid: '', needTap: false, iv: 0, miv: 0 });
+  Object.assign(vc, { on: false, joining: false, mute: false, stream: null, vid: '', needTap: false, iv: 0, miv: 0 });
   vc.retry.clear(); vc.fails.clear();
   if (was && !silent) vcAnnounce();
 }
