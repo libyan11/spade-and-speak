@@ -222,17 +222,12 @@ input::placeholder { color: var(--muted); opacity: .8; }
 
 /* full card: one word for every category; the space's category is big, the rest are small underneath.
    One category on every card carries a ♠: on a spade space that word is the one to describe. */
-.card.full .card-word { min-height: 140px; padding: 20px 16px 14px; }
-.card-rows { list-style: none; margin: 0; padding: 0 12px 12px; display: grid; gap: 4px; }
+.card-rows { list-style: none; margin: 0; padding: 14px 12px; display: grid; gap: 6px; }
 .card-rows li { display: block; }
-.cr { display: flex; align-items: center; gap: 10px; width: 100%; padding: 5px 8px; border-radius: 12px; font: inherit; color: inherit; text-align: left; background: none; border: 0; }
+.cr { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 12px; box-shadow: inset 0 0 0 1.5px rgba(31, 27, 63, .1); }
 .cr-cat { flex: none; min-width: 5.4em; padding: 2px 8px; border-radius: 999px; background: var(--cat); color: var(--cat-fg); font-family: var(--f-body); font-size: .64rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
-.cr-word { font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
-.card-rows.rest { border-top: 1.5px dashed rgba(31, 27, 63, .16); padding-top: 9px; }
-.card-rows.rest .cr { opacity: .55; font-size: .9rem; padding: 2px 6px; }
-.cr-spade { font-style: normal; flex: none; width: 1.5em; height: 1.5em; border-radius: 50%; display: grid; place-items: center; background: #1F1B3F; color: #fff; font-size: .95rem; line-height: 1; }
-.card.full .card-word { position: relative; }
-.card-spade { position: absolute; top: 10px; right: 12px; font-style: normal; width: 2.1rem; height: 2.1rem; border-radius: 50%; display: grid; place-items: center; background: #1F1B3F; color: #fff; font-family: var(--f-body); font-size: 1.35rem; line-height: 1; }
+.cr-word { min-width: 0; overflow-wrap: anywhere; font-family: var(--f-display); font-size: clamp(1.15rem, 4.6vw, 1.6rem); line-height: 1.1; }
+.cr-spade { margin-left: auto; font-style: normal; flex: none; width: 1.6em; height: 1.6em; border-radius: 50%; display: grid; place-items: center; background: #1F1B3F; color: #fff; font-size: .95rem; line-height: 1; }
 .skip-note { border-radius: 14px; padding: 10px 14px; background: var(--stage-line); font-size: .95rem; text-align: center; }
 .skip-note b { color: #FFD66B; }
 .card-stack { position: relative; }
@@ -607,22 +602,26 @@ function draw(cat) {
 }
 /* what a card is called in the turn summary when it wasn't guessed */
 function cardLabel(c) { return !c ? '' : c.word || ''; }
-function cardBand(card, fin, turnCat) {
-  const cc = card && card.cat;
+function cardBand(card, fin, turnCat, style) {
+  const cc = card && card.cat, hard = card && card.hard ? ' · ★ Hard' : '';
   if (fin) return 'Final · ' + (CAT[cc] || '');
-  return (turnCat === 'any' ? '♠ Spade · ' : '') + (CAT[cc] || '') + (card && card.hard ? ' · ★ Hard' : '');
+  if (turnCat === 'any') return style === 'single' ? '♠ Spade · ' + (CAT[cc] || '') + hard : '♠ Spade' + hard;
+  return (CAT[cc] || '') + hard;
 }
+/* Two card styles (a setting): 'full' shows all 6 words the same size, like a printed card, and the banner
+   says which one to describe (on a spade space, the ♠ word). 'single' shows only the word to describe. */
+const CARD_STYLES = { full: 'Full card', single: 'One word' };
+const CARD_HINT = { full: 'Every card shows all 6 words. The banner says which one to describe (♠ on a spade space).', single: 'Only the word to describe, big, like before.' };
 function fullCardHTML(card, o) {
-  const cat = card && card.cat || 'object';
+  const cat = card && card.cat || 'object', full = o.style !== 'single';
   const words = card && (card.words || (card.word ? { [card.cat]: card.word } : null));
+  const band = full && o.spadeTurn ? 'any' : cat;
   const head = `<div class="card-band"><span>${o.band}</span><span>${o.right}</span></div>`;
-  if (o.paused || !words || !words[cat]) return `<div class="card-stack"><div class="card full cat-${cat} paused">${head}<div class="card-word">${o.paused ? 'Paused' : '…'}</div></div></div>`;
-  const sp = c => card.spade === c ? '<i class="cr-spade" title="Spade word">♠</i>' : '';
-  const rest = ORDER.filter(c => c !== cat && words[c]);
-  return `<div class="card-stack"><div class="card full cat-${cat}">${head}`
-    + `<div class="card-word" dir="auto">${card.spade === cat ? '<i class="card-spade" title="Spade word">♠</i>' : ''}${esc(words[cat])}</div>`
-    + (rest.length ? `<ul class="card-rows rest" aria-label="Other words on this card">${rest.map(c => `<li class="cat-${c}"><div class="cr"><span class="cr-cat">${CAT[c]}</span>${sp(c)}<span class="cr-word" dir="auto">${esc(words[c])}</span></div></li>`).join('')}</ul>` : '')
-    + `</div></div>`;
+  if (o.paused || !words || !words[cat]) return `<div class="card-stack"><div class="card cat-${band} paused">${head}<div class="card-word">${o.paused ? 'Paused' : '…'}</div></div></div>`;
+  if (!full || !card.words) return `<div class="card-stack"><div class="card cat-${cat}">${head}<div class="card-word" dir="auto">${esc(words[cat])}</div></div></div>`;
+  return `<div class="card-stack"><div class="card full cat-${band}">${head}<ul class="card-rows all">`
+    + ORDER.filter(c => words[c]).map(c => `<li class="cat-${c}"><div class="cr"><span class="cr-cat">${CAT[c]}</span><span class="cr-word" dir="auto">${esc(words[c])}</span>${card.spade === c ? '<i class="cr-spade" title="Spade word">♠</i>' : ''}</div></li>`).join('')
+    + `</ul></div></div>`;
 }
 function posLabel(p) { return p === 0 ? 'the start' : p === S.len - 1 ? 'the finish' : 'space ' + p; }
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
@@ -739,7 +738,7 @@ function startGame() {
     name: (t.name || '').trim() || `Team ${i + 1}`, color: TEAM_COLORS[i],
     players: (t.players || '').split(',').map(s => s.trim()).filter(Boolean), pos: 0, desc: 0
   }));
-  S = { phase: 'idle', len: draft.len, words: MODES[draft.words] ? draft.words : 'normal', spaces: buildSpaces(draft.len), teams, cur: 0, decks: {}, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, winner: null, log: [] };
+  S = { phase: 'idle', len: draft.len, words: MODES[draft.words] ? draft.words : 'normal', cards: CARD_STYLES[draft.cards] ? draft.cards : 'full', spaces: buildSpaces(draft.len), teams, cur: 0, decks: {}, turn: null, spade: null, spinner: null, vote: null, last: null, after: null, winner: null, log: [] };
   logStart({ players: logPlayers() });
   store(DRAFT_KEY, draft); saved = null; disp = {}; boardKey = '';
   save(); render();
@@ -773,6 +772,7 @@ const ACT = {
   count(b) { readDraftInputs(); draft.count = +b.dataset.n; store(DRAFT_KEY, draft); renderSetup(); },
   len(b) { readDraftInputs(); draft.len = +b.dataset.n; store(DRAFT_KEY, draft); renderSetup(); },
   words(b) { readDraftInputs(); draft.words = b.dataset.mode; store(DRAFT_KEY, draft); renderSetup(); },
+  cards(b) { readDraftInputs(); draft.cards = b.dataset.mode; store(DRAFT_KEY, draft); renderSetup(); },
   start: startGame,
   resume() { S = saved; saved = null; normalize(); boardKey = ''; render(); },
   discard() { store(SAVE_KEY, null); saved = null; renderSetup(); },
@@ -981,6 +981,11 @@ function renderSetup() {
         <div class="seg-group" role="group" aria-labelledby="wordsLabel">${Object.keys(MODES).map(m => `<button data-act="words" data-mode="${m}" aria-pressed="${m === (d.words || 'normal')}">${MODES[m]}</button>`).join('')}</div>
         <p class="muted" style="font-size:.88rem">${MODE_HINT[d.words || 'normal']}</p>
       </div>
+      <div class="field">
+        <span class="label" id="cardsLabel">Cards</span>
+        <div class="seg-group" role="group" aria-labelledby="cardsLabel">${Object.keys(CARD_STYLES).map(m => `<button data-act="cards" data-mode="${m}" aria-pressed="${m === (d.cards || 'full')}">${CARD_STYLES[m]}</button>`).join('')}</div>
+        <p class="muted" style="font-size:.88rem">${CARD_HINT[d.cards || 'full']}</p>
+      </div>
       <div class="row">
         <button class="btn btn-primary btn-lg" data-act="start">Start game</button>
         <button class="btn btn-lg" data-act="rules">Read the rules</button>
@@ -1089,7 +1094,7 @@ const STAGE = {
         ${timerHTML()}
         <div class="tally">${fin ? `<b>1</b><span>to win</span>` : `<b>${got}</b><span>correct</span>`}</div>
       </div>
-      ${fullCardHTML(tr.card, { band: cardBand(tr.card, fin, tr.cat), right: esc(S.teams[S.cur].name), paused: tr.paused })}
+      ${fullCardHTML(tr.card, { band: cardBand(tr.card, fin, tr.cat, S.cards), style: S.cards, spadeTurn: tr.cat === 'any' && !fin, right: esc(S.teams[S.cur].name), paused: tr.paused })}
       <div class="parked">
         ${tr.parked
           ? `<span>Skipped: <b>${tr.paused ? '•••' : esc(tr.parked.word)}</b></span><span class="kbd-hint">Go back any time. This card waits here instead.</span>`
