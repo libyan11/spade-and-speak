@@ -91,6 +91,18 @@ input[type="text"] { font: inherit; padding: .62em .8em; border-radius: 12px; bo
 .home-card { background: var(--surface); border-radius: 22px; padding: 22px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 1px 0 var(--line), 0 18px 34px -24px var(--shadow); }
 .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 700; font-size: .85rem; text-transform: uppercase; letter-spacing: .1em; }
 .or::before, .or::after { content: ""; flex: 1; height: 1.5px; background: var(--line); }
+.open-games { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+.og {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; text-align: left;
+  width: 100%; border: 0; cursor: pointer; font: inherit; color: var(--ink); background: var(--bg); border-radius: 14px; padding: 10px 12px;
+  box-shadow: inset 0 0 0 1.5px var(--line); touch-action: manipulation;
+}
+.og:hover { box-shadow: inset 0 0 0 2px var(--accent); }
+.og-name { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.og-meta { grid-row: 2; font-size: .84rem; color: var(--muted); }
+.og-meta i { font-style: normal; color: var(--good); font-weight: 700; }
+.og-go { grid-row: 1 / 3; grid-column: 2; background: var(--accent); color: var(--on-accent); font-weight: 800; border-radius: 999px; padding: .45em 1em; }
+.og-empty { margin: 0; font-size: .9rem; color: var(--muted); }
 .join-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 #joinCode { text-transform: uppercase; letter-spacing: .3em; font-weight: 800; font-size: 1.2rem; }
 .status { font-size: .92rem; font-weight: 600; color: var(--muted); min-height: 1.4em; }
@@ -945,6 +957,7 @@ function broadcast() {
     if (c.open && c.pid) { try { c.send({ t: 'state', state: publicState(c.pid), remainingMs: rem, hs: hostSess, sv }); } catch (e) {} }
   });
   LS && setItem(LS, 'sps-host', S);
+  dirPost();
   render();
 }
 
@@ -960,16 +973,17 @@ const RELAYS = [
 const RELAY_ROOT = 'spade-speak-v1/';
 const relay = { clients: [], seq: 0, sess: '', seen: new Map() };
 function roomTopic(rest) { return 'room/' + roomCode.toLowerCase() + '/' + rest; }
-function relayStart(listen, onMsg) {
+function relayStart(listen, onMsg, willTopic) {
   relayStop();
   if (typeof mqtt === 'undefined') return;
   relay.sess = Math.random().toString(36).slice(2, 8);
   const topic = RELAY_ROOT + listen;
   relay.clients = RELAYS.map(([url, o]) => {
     let c;
-    try { c = mqtt.connect(url, { ...o, clientId: 'sps-' + me + '-' + Math.random().toString(36).slice(2, 6), connectTimeout: 10000, reconnectPeriod: 4000, keepalive: 30 }); }
+    const will = willTopic ? { will: { topic: RELAY_ROOT + willTopic, payload: '', retain: true, qos: 0 } } : {};
+    try { c = mqtt.connect(url, { ...o, ...will, clientId: 'sps-' + me + '-' + Math.random().toString(36).slice(2, 6), connectTimeout: 10000, reconnectPeriod: 4000, keepalive: 30 }); }
     catch (e) { return null; }
-    c.on('connect', () => c.subscribe(topic));
+    c.on('connect', () => { c.subscribe(topic); if (willTopic) setTimeout(() => dirPost(true), 500); });
     c.on('message', (t, buf) => {
       let env; try { env = JSON.parse(buf.toString()); } catch (e) { return; }
       if (!env || !env.id || env.f === me || relay.seen.has(env.id)) return;
@@ -990,8 +1004,78 @@ function relayStop() {
   relay.clients = []; relay.seen.clear();
 }
 
+/* ================= OPEN GAMES (trial) =================
+   Instead of typing a code, people on the home screen see the games that are open right now and tap to join.
+   Each host posts a small note about its room to the relays (kept there by the relay, refreshed every 8 seconds,
+   cleared when the host leaves or its connection drops). The home screen listens and lists the fresh ones.
+   Room codes still work as before. A host can hide its room from the list in the lobby. */
+const DIR_TOPIC = RELAY_ROOT + 'rooms/';
+const dir = { clients: [], rooms: new Map(), iv: 0, postIv: 0, lastKey: '', lastAt: 0, html: '' };
+function dirInfo() {
+  if (role !== 'host' || !S || !S.code || S.listed === false) return null;
+  const h = S.players.find(p => p.id === S.hostId);
+  return { code: S.code, host: h ? h.name : 'Host', n: S.players.filter(p => p.online).length, phase: S.phase === 'lobby' ? 'lobby' : 'play' };
+}
+/* host: post the room note when something changes, and at least every 8 seconds */
+function dirPost(force) {
+  if (role !== 'host' || !S || !S.code) return;
+  const info = dirInfo(), key = JSON.stringify(info);
+  if (!force && key === dir.lastKey && Date.now() - dir.lastAt < 8000) return;
+  dir.lastKey = key; dir.lastAt = Date.now();
+  const body = info ? JSON.stringify({ ...info, ts: Date.now() }) : '';
+  relay.clients.forEach(c => { if (c.connected) { try { c.publish(DIR_TOPIC + S.code.toLowerCase(), body, { retain: true }); } catch (e) {} } });
+}
+function dirHostStart() { clearInterval(dir.postIv); dir.postIv = setInterval(() => dirPost(), 8000); setTimeout(() => dirPost(true), 1500); }
+function dirHostStop() {
+  clearInterval(dir.postIv); dir.postIv = 0;
+  if (roomCode) relay.clients.forEach(c => { if (c.connected) { try { c.publish(DIR_TOPIC + roomCode.toLowerCase(), '', { retain: true }); } catch (e) {} } });
+  dir.lastKey = '';
+}
+/* home screen: listen for room notes while it's showing */
+function dirWatch() {
+  if (dir.clients.length || typeof mqtt === 'undefined') return;
+  dir.clients = RELAYS.map(([url, o]) => {
+    let c;
+    try { c = mqtt.connect(url, { ...o, clientId: 'sps-dir-' + me + '-' + Math.random().toString(36).slice(2, 6), connectTimeout: 10000, reconnectPeriod: 5000, keepalive: 30 }); }
+    catch (e) { return null; }
+    c.on('connect', () => { c.subscribe(DIR_TOPIC + '+'); setTimeout(dirPaint, 1200); });
+    c.on('message', dirOnMsg);
+    c.on('error', () => {});
+    return c;
+  }).filter(Boolean);
+  clearInterval(dir.iv); dir.iv = setInterval(dirPaint, 3000);
+}
+function dirUnwatch() {
+  if (!dir.clients.length) return;
+  dir.clients.forEach(c => { try { c.end(true); } catch (e) {} });
+  dir.clients = []; clearInterval(dir.iv); dir.iv = 0; dir.rooms.clear(); dir.html = '';
+}
+function dirOnMsg(t, buf) {
+  const code = t.slice(DIR_TOPIC.length).toUpperCase();
+  if (!/^[A-Z0-9]{5}$/.test(code)) return;
+  let m = null;
+  try { m = buf && buf.length ? JSON.parse(buf.toString()) : null; } catch (e) { return; }
+  if (!m) { if (dir.rooms.delete(code)) dirPaint(); return; }
+  if (typeof m !== 'object' || String(m.code) !== code || typeof m.ts !== 'number' || Math.abs(Date.now() - m.ts) > 60000) return;
+  const prev = dir.rooms.get(code);
+  if (prev && prev.ts >= m.ts) { prev.seen = Date.now(); return; }   // the same note from another relay
+  dir.rooms.set(code, { code, host: String(m.host || 'Host').slice(0, 20), n: Math.max(1, Math.min(30, m.n | 0)), phase: m.phase === 'play' ? 'play' : 'lobby', ts: m.ts, seen: Date.now() });
+  dirPaint();
+}
+function dirPaint() {
+  const box = $('#openGames'); if (!box) return;
+  const now = Date.now();
+  dir.rooms.forEach((r, k) => { if (now - r.seen > 25000) dir.rooms.delete(k); });
+  const list = [...dir.rooms.values()].sort((a, b) => (a.phase === 'lobby' ? 0 : 1) - (b.phase === 'lobby' ? 0 : 1) || b.ts - a.ts).slice(0, 15);
+  const html = list.length
+    ? list.map(r => `<button type="button" class="og" data-act="joinOpen" data-code="${r.code}"><span class="og-name" dir="auto">${esc(r.host)}'s game</span><span class="og-meta">${r.n} ${r.n === 1 ? 'player' : 'players'} · ${r.phase === 'lobby' ? '<i>Waiting to start</i>' : 'Playing now'}</span><span class="og-go">Join</span></button>`).join('')
+    : `<p class="og-empty">${dir.clients.some(c => c.connected) ? 'No open games right now. Create one and it shows up here for everyone.' : 'Looking for open games…'}</p>`;
+  if (html !== dir.html || !box.firstChild) { dir.html = html; box.innerHTML = html; }
+}
+
 function startHostRelay() {
   relayConns.clear();
+  dirHostStart();
   relayStart(roomTopic('host'), (m, f) => {
     if (role !== 'host' || !m || !f) return;
     let c = relayConns.get(f);
@@ -1002,7 +1086,7 @@ function startHostRelay() {
     }
     c.seen = Date.now();
     if (m.t !== 'ping') hostReceive(c, m);
-  });
+  }, 'rooms/' + roomCode.toLowerCase());
   clearInterval(beatIv);
   beatIv = setInterval(() => {
     relayConns.forEach((c, f) => {
@@ -1184,10 +1268,13 @@ function msLeft(v) {
 }
 function leave(msg) {
   vcStop(true);
+  if (role === 'host') dirHostStop();
   clearTimeout(retryTimer); hostStopTimer();
   clearTimeout(fallbackTimer); clearTimeout(giveUpTimer); clearInterval(helloIv); clearInterval(beatIv); helloIv = 0;
   try { peer && peer.destroy(); } catch (e) {}
-  relayStop(); relayConns.clear(); link = null;
+  const closing = relay.clients; relay.clients = []; relay.seen.clear();
+  closing.forEach(c => { try { c.end(false); } catch (e) {} });   // let the "room closed" note go out first
+  relayConns.clear(); link = null;
   peer = null; hostConn = null; conns.clear();
   if (role === 'host') LS && setItem(LS, 'sps-host', null);
   if (role === 'guest') LS && setItem(LS, 'sps-guest', null);
@@ -1516,6 +1603,7 @@ function timerHTML() {
 function render() {
   const v = view();
   const inRoom = !!role;
+  if (!inRoom) dirWatch(); else dirUnwatch();
   renderChat(v);
   if (vc.on) vcSync(); else renderCall();
   $('#leaveBtn').hidden = !inRoom;
@@ -1570,7 +1658,7 @@ function renderHome() {
     <div class="home-left">
       <p class="eyebrow">Online · classic rules · 30-second turns</p>
       <h1>Describe it fast. Race round the ring.</h1>
-      <p class="lede">Play on your own phones from anywhere. One person creates a game and shares the room code. Everyone else joins with it and picks a team. No accounts needed.</p>
+      <p class="lede">Play on your own phones from anywhere. One person creates a game. Everyone else taps it under Open games (or types its room code) and picks a team. No accounts needed.</p>
       <p class="muted" style="font-size:.92rem;margin:0 0 12px">No internet? <a href="play/" style="color:inherit;font-weight:700">Play on one phone instead</a>. It works offline and you can add it to your home screen.</p>
       <div class="board-wrap" style="max-width:340px;margin:0">${boardSVG(buildSpaces(40), false)}</div>
     </div>
@@ -1579,9 +1667,14 @@ function renderHome() {
         <label class="label" for="myName">Your name</label>
         <input type="text" id="myName" maxlength="20" placeholder="e.g. Sam" value="${esc(nameVal)}">
       </div>
+      <div class="field">
+        <span class="label">Open games · tap to join</span>
+        <div class="open-games" id="openGames"></div>
+      </div>
+      <div class="or">or</div>
       <button class="btn btn-primary btn-lg" type="button" data-act="create">Create a game</button>
       ${savedHost && savedHost.code ? `<div class="resume"><div><b>Your room ${esc(savedHost.code)}</b><div class="muted" style="font-size:.88rem">${savedHost.phase === 'lobby' ? 'Still in the lobby' : 'Game in progress'}</div></div><div class="row"><button class="btn btn-small" type="button" data-act="forgetHost">Discard</button><button class="btn btn-primary btn-small" type="button" data-act="resumeHost">Reopen room</button></div></div>` : ''}
-      <div class="or">or join a game</div>
+      <div class="or">or join with a code</div>
       <div class="field">
         <label class="label" for="joinCode">Room code</label>
         <div class="join-row">
@@ -1593,6 +1686,7 @@ function renderHome() {
     </form>
   </div>`;
   if (focusId && document.getElementById(focusId)) document.getElementById(focusId).focus();
+  dir.html = ''; dirPaint();
 }
 function readName() {
   const n = ($('#myName') ? $('#myName').value : myName).trim().slice(0, 20);
@@ -1612,9 +1706,10 @@ function renderLobby(v) {
     <div class="lobby-head">
       <div><p class="eyebrow">Room code</p><div class="code">${esc(v.code)}</div></div>
       <div class="invite">
-        <p>Friends open this page, enter the code and pick a team. Or send them the link:</p>
+        <p>Friends open this page and tap your game under Open games, or enter the code. Or send them the link:</p>
         <code id="inviteLink">${esc(link)}</code>
         <div class="row"><button class="btn btn-small" data-act="copy">Copy invite link</button><span class="muted" id="copyMsg" style="font-size:.85rem"></span></div>
+        ${host ? `<div class="row" style="margin-top:6px"><button class="btn btn-small" data-act="toggleListed" aria-pressed="${v.listed !== false}">${v.listed !== false ? '✓ Shown in Open games' : 'Hidden from Open games'}</button><span class="muted" style="font-size:.85rem">${v.listed !== false ? 'Anyone on the home screen can tap to join.' : 'Only people with the code or link can join.'}</span></div>` : ''}
       </div>
     </div>
     ${host ? `<div class="settings">
@@ -1967,6 +2062,16 @@ const UI = {
     normalizeHost(); openHostPeer(); startHostRelay(); broadcast();
   },
   forgetHost() { LS && setItem(LS, 'sps-host', null); renderHome(); },
+  joinOpen(b) {
+    if (!readName()) return;
+    if (typeof Peer === 'undefined' && typeof mqtt === 'undefined') { homeMsg = "Couldn't load the connection library. Check your internet and reload."; homeErr = true; renderHome(); return; }
+    joinRoom(b.dataset.code);
+  },
+  toggleListed() {
+    if (role !== 'host' || !S) return;
+    S.listed = S.listed === false;
+    dirPost(true); broadcast();
+  },
   join() {
     if (!readName()) return;
     const code = ($('#joinCode').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
