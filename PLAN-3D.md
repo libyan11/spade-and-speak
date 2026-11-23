@@ -7,10 +7,31 @@ Status: plan only. Nothing here has been built yet.
 
 | Repo | Game | Size | How it draws now |
 |---|---|---|---|
-| `libyan11/spade-and-speak` | Spade & Speak (team word game on a round board) | `index.html` ~214 KB, plus `play/` (installable PWA copy with `sw.js`) | SVG board from `boardSVG()` (index.html:632), tokens moved by `updateTokens()` / `animateLocal()` (661, 690), spinner wheel by `paintWheel()` / `driveWheel()` (2011–2012), word cards from `fullCardHTML()` (754) |
-| `libyan11/president-and-peasant` | President card game, 2–8 players plus computer players | `index.html` ~92 KB | DOM cards: `renderSeats()`, `renderTable()`, `renderHand()`, `fitHand()` (1296–1443) |
-| `libyan11/grand-tour-tycoon` | Property trading board game, 2–8 players | `index.html` ~160 KB | DOM/CSS 40-cell board from `boardHTML()` (1492), `placeTokens()` (1396), `animateDice(final)` (1296), SVG icons for special cells (around line 479) |
+| `libyan11/spade-and-speak` | Spade & Speak (team word game on a round board) | `index.html` ~214 KB (online rooms), plus `play/` (offline one-phone PWA, see below) | SVG board from `boardSVG()`, tokens moved by `updateTokens()` / `animateLocal()`, spinner wheel by `paintWheel()` / `driveWheel()`, word cards from `fullCardHTML()` |
+| `libyan11/president-and-peasant` | President card game, 2–8 players plus computer players | `index.html` ~92 KB | DOM cards: `renderSeats()`, `renderTable()`, `renderHand()`, `fitHand()` |
+| `libyan11/grand-tour-tycoon` | Property trading board game, 2–8 players | `index.html` ~160 KB | DOM/CSS 40-cell board from `boardHTML()`, `placeTokens()`, `animateDice(final)`, SVG icons for special cells |
 | `libyan11/libyan11.github.io` | Game Night hub page that links to the three games | `index.html` ~9 KB | Plain cards |
+
+Find code by **function name** (grep), not line number. Line numbers move with every edit.
+
+### Where each game's files really come from
+
+The repos are not the only copies. The user's local folder (`Gprogram/`) holds the sources and build scripts:
+
+| Game | Copy | Built from | How |
+|---|---|---|---|
+| Spade & Speak | Online rooms: repo `index.html` (local `online/index.html`) | edited directly | push to `main` |
+| Spade & Speak | One phone: claude.ai artifact | `spade-and-speak.html` (a **different file**: one-phone game, no `animateLocal`) | republish the artifact |
+| Spade & Speak | Offline one phone: repo `play/` | `spade-and-speak.html` via `py build-play.py` | the script writes `play/index.html`, icons, manifest **and `sw.js`** (its cache name is a hash of the files) |
+| President & Peasant | Pages: repo `index.html` | `president-and-peasant.html` via `sh build-president.sh` (swaps CDN script URLs to `vendor/`) | push |
+| President & Peasant | claude.ai artifact (solo only) | `president-and-peasant.html` | republish |
+| Grand Tour Tycoon | Pages: repo `index.html` (local `tycoon-online/index.html`) | edited directly | push |
+
+Consequences for 3D:
+
+- Never hand-edit `play/index.html` or `play/sw.js`. Change `spade-and-speak.html` and `build-play.py`, then rerun the script.
+- **claude.ai artifacts can't load files from `vendor/`.** Their copies load Three.js from cdnjs (`https://cdnjs.cloudflare.com/ajax/libs/three.js/<version>/...`), the same pinned version as `vendor/`. President's build script already swaps CDN→`vendor/`; add the Three.js URL to that swap. If cdnjs doesn't carry the pinned module build, the artifact copies stay 2D only, and say so in the setting.
+- 3D textures (`assets/3d/`) can't be loaded by the artifact either. In artifact copies use the procedural canvas textures, or inline small images as `data:` URIs.
 
 Shared facts that shape the plan:
 
@@ -26,13 +47,13 @@ Give every game an optional 3D view of the board or table, built with Three.js, 
 ## Rules for the whole project
 
 1. **3D is only a view.** Don't change game state, rules, or the network messages. A 3D player and a 2D player in the same room must see the same game. The new code reads the same state the 2D `render()` reads.
-2. **2D stays as the fallback.** Use 2D when WebGL2 is missing, when `navigator.deviceMemory < 4`, when the WebGL context is lost, or when the player turns 3D off.
+2. **2D stays as the fallback.** Use 2D when WebGL2 is missing, when `navigator.deviceMemory < 4`, when the WebGL context is lost, or when the player turns 3D off. Safari/iPhone doesn't report `deviceMemory` (it's `undefined`), so treat "unknown" explicitly: allow 3D, but watch the first few seconds of frame times and drop to 2D (with a short notice) if they stay above ~33 ms.
 3. **Load Three.js only when 3D is on.** It should not be in the first page load. Load it after the page shows, the same way `window.NET` loads the connection scripts.
 4. **Text stays in HTML.** Words, names, prices, timers, chat and buttons stay as DOM on top of the canvas, so they stay sharp, translatable and readable by screen readers. The canvas gets `aria-hidden="true"`. The existing SVG `<title>`s and `aria-label`s move to a visually hidden description.
 5. **Dice and spinner results come from the game, not from physics.** The host picks the result as now, and the 3D animation ends on that result on every device.
 6. **Draw frames only while something moves.** No constant render loop. Stop when the tab is hidden. Cap device pixel ratio at 2, or 1.5 on weak devices. Aim for 60 fps on a mid-range phone.
 7. **With reduced motion on** (`prefers-reduced-motion`): no camera sweeps, and pieces jump straight to where they end up.
-8. **Each repo stays self-contained.** Copy the shared 3D helper into each repo. Don't load it across repos.
+8. **Each repo stays self-contained.** Copy the shared 3D helper into each repo. Don't load it across repos. Keep **one master copy** at `Gprogram/shared/board3d.js` and copy it out (a few lines in each build script, or a small `sync-3d` script), so the copies don't drift. Put a version comment at the top of the file.
 
 ## Tech choices
 
@@ -40,7 +61,8 @@ Give every game an optional 3D view of the board or table, built with Three.js, 
 - **No model files to begin with.** Build boards, tokens, dice, cards, houses and the table from simple geometry in code (rounded boxes, cylinders, extruded shapes). It stays small and needs no loader. Add glTF only if a piece really needs it, and then only with Draco/meshopt compression.
 - **Text on 3D surfaces** (board cell names, card ranks): draw it on a canvas and use that as a texture, generated in the browser from the game's own data.
 - **Lighting:** one hemisphere light, one directional light, and a baked soft shadow under the board. No live shadow maps on phones.
-- **A setting in each game:** "3D board: On / Off", saved in `localStorage`. Every read and write of the setting goes in try/catch. The default is On only when the device passes the checks in rule 2.
+- **A setting in each game:** "3D board: On / Off", saved in `localStorage`. Every read and write of the setting goes in try/catch. **First release: default Off.** Switch the default to On (for devices that pass rule 2) only after the spike's phone numbers are good and the user has played a real game night with it.
+- **Size:** Three.js's module build is roughly 170 KB compressed (~650 KB raw). That fits the 2 MB budget, but it goes into the offline precache too, so only add it to `play/` once 3D ships there.
 
 ## Where Gemini comes in
 
@@ -58,7 +80,7 @@ What to ask Gemini for:
 | Board surface paper/print texture | Grand Tour Tycoon and Spade & Speak boards | "Seamless subtle printed cardboard texture, off-white, no pattern, no text" |
 | Card backs (one per game) | President & Peasant cards, Spade & Speak word cards, Tycoon chance/chest cards | "Playing card back design, symmetrical, [palette from game CSS], no text, flat, 512×768" |
 | Backdrop gradient or soft room blur | Behind the 3D scene | "Soft out-of-focus warm living room background, no objects in focus" |
-| Token reference sheets | Guide for modelling pawns and tokens in code | "Turnaround sheet of 4 chunky toy game tokens: car, top hat, dog, ship, plain colours" |
+| Token reference sheets | Guide for modelling pawns and tokens in code | "Turnaround sheet of 4 chunky toy travel-themed game tokens: suitcase, plane, camera, globe, plain colours" |
 | Fallback if Gemini is unavailable | Everything above | Procedural canvas textures: noise for felt and paper, stripes for wood, and the existing SVG icons drawn onto canvas |
 
 Handling Gemini output:
@@ -88,10 +110,12 @@ A small module, about 300 lines, that every game uses:
 - **Board:** build the ring from the same `spaces` data and angles `boardSVG()` uses (R0/R1, `seg-<cat>` colours from the CSS variables). Each space is an extruded ring segment with a small height. Mark spade and spinner spaces with raised badges. Add a finish space.
 - **Tokens:** a team pawn for each team, in its team colour. `updateTokens()` / `animateLocal()` become hops along the segment centres, at the same timing as now, so 2D and 3D players stay in step.
 - **Spinner:** a 3D wheel that eases onto the same slice and angle `driveWheel(sp)` uses, over `SPIN_MS`.
-- **Word card:** a 3D card flips up from the deck. The words stay as the `fullCardHTML()` DOM, placed over the card, and still follow the "full card / one word" setting.
+- **Word card:** a 3D card flips up from the deck, then the existing `fullCardHTML()` DOM card appears in its place (no HTML text glued to a moving 3D card: keeping it lined up during the flip is fiddly and blurs). It still follows the "full card / one word" setting.
 - **HUD:** timer, chat, voice call and panel stay as they are.
 - **Home screen:** the demo board (`boardSVG(buildSpaces(40), false)`) becomes a slowly turning 3D board. Show it only when 3D is on and reduced motion is off.
-- **PWA copy:** `play/index.html` gets the same changes. Add the new vendor and asset files to the precache list in `play/sw.js` and bump the cache name.
+- **One-phone copies:** make the matching changes in `Gprogram/spade-and-speak.html` (its own code paths: it has `updateTokens()` but no `animateLocal()`, so map tokens to that file's functions). Then:
+  - **Offline `play/`:** change `build-play.py` so it copies `vendor/three-…` and `assets/3d/` into `play/` (or points at `../vendor/`, `../assets/3d/`) and adds them to the `SHELL` precache list it writes into `sw.js`. Rerun `py build-play.py`; the cache name updates itself from the hash.
+  - **Artifact:** Three.js from cdnjs and procedural textures (see "Where each game's files really come from"), then republish the artifact.
 
 ### 2. President & Peasant
 
@@ -100,11 +124,12 @@ A small module, about 300 lines, that every game uses:
 - **Your hand stays 2D** (`renderHand()` / `fitHand()`). Picking cards on a phone must stay easy. Played cards fly from the bottom edge of the screen into the 3D pile.
 - **Card faces:** canvas textures made from rank and suit, matching the current card look, plus the jokers. Card back from Gemini.
 - **End of game:** a short camera move for the title swap (President ↔ Peasant). Skip it when reduced motion is on.
+- **Copies:** edit `president-and-peasant.html`, add the Three.js CDN→`vendor/` swap to `build-president.sh`, run it, push, and republish the artifact (solo only there). Keep the user's house rules untouched; 3D is only a view.
 
 ### 3. Grand Tour Tycoon (the biggest)
 
 - **Board:** a square slab with the 40 cells laid out from `cellRC()` / `MID`. Each property gets a colour band. Cell names and prices are canvas textures. Draw the special-cell SVG icons (rail, bulb, tap, chest, tax, car, cop) onto canvas textures, so they don't have to be redrawn.
-- **Tokens:** low-poly car, hat, dog and ship, modelled from the Gemini reference sheet, in player colours (`PCOLORS`). They move cell by cell through `placeTokens()`'s path and take the short way to jail.
+- **Tokens:** the game's own travel-themed set (suitcase, plane, camera, globe, and more up to 8 players), low-poly, modelled from the Gemini reference sheet, in player colours (`PCOLORS`). Don't use the classic car / top hat / dog / ship: those are another game's well-known pieces. They move cell by cell through `placeTokens()`'s path and take the short way to jail.
 - **Dice:** two rounded-box dice that tumble and land on `animateDice(final)`'s result. The rotation that shows each face is precomputed.
 - **Houses and hotels:** small instanced meshes on the colour band, updated from state.
 - **Chance and chest cards:** a card lifts from its deck and flips. The text stays in the existing modal from `renderModal()`.
@@ -119,17 +144,22 @@ A small module, about 300 lines, that every game uses:
 
 1. **Spike (one session):** add `board3d.js` and Three.js to Spade & Speak. Show the ring board with tokens in the lobby view. Measure page load, fps and memory on a phone-sized viewport. Stop and report the numbers before going on.
 2. **Gemini art round 1:** style frames for all three games. The user chooses a direction.
-3. **Spade & Speak, all of it:** board, tokens, spinner, card, setting, PWA copy, tests.
-4. **Gemini art round 2:** felt, wood, card backs and token references.
-5. **President & Peasant.**
-6. **Grand Tour Tycoon.**
-7. **Hub hero (optional).**
+3. **Spade & Speak, all of it:** board, tokens, spinner, card, setting, one-phone copy, `play/` via `build-play.py`, artifact, tests. Ship it (default Off).
+4. **Checkpoint:** the user plays a real game night with 3D on. Fix what comes up, decide whether to flip the default, and confirm going on to the other games.
+5. **Gemini art round 2:** felt, wood, card backs and token references.
+6. **President & Peasant.**
+7. **Grand Tour Tycoon.**
+8. **Hub hero (optional).**
 
 Each game is its own branch with its own PR in its own repo. Don't open PRs unless the user asks.
 
-**Repository access:** this session can push only to `spade-and-speak` (branch `claude/jolly-mccarthy-sj4quc`). `president-and-peasant` and `libyan11.github.io` were readable here. Attaching `grand-tour-tycoon` was refused, so the user needs to allow it, or start a session in that repo, before step 6.
+**Publishing each game** (same routine as now): run the game's build script (`build-play.py` / `build-president.sh`), commit, push to `main`, curl the Pages URL until the new version is live, then republish the claude.ai artifact. If the hub's links change, publish the hub repo first.
 
-## Testing (Playwright with the preinstalled Chromium)
+**Repository access:** this session can push only to `spade-and-speak` (branch `claude/jolly-mccarthy-sj4quc`). `president-and-peasant` and `libyan11.github.io` were readable here. Attaching `grand-tour-tycoon` was refused, so the user needs to allow it, or start a session in that repo, before step 7.
+
+## Testing
+
+In a cloud session: Playwright with the preinstalled Chromium. On the user's PC: the Claude desktop app's built-in browser pane with the local dev servers in `.claude/launch.json`. The pane can't register service workers on localhost, so check `play/`'s offline cache on the live site. Two players in one browser share `localStorage`, so serve the second player from a different origin.
 
 - Screenshots of each game in 3D and 2D at phone (390×844) and desktop sizes, in light and dark themes.
 - **Mixed room:** two browser contexts in one room, one with 3D and one with 2D. Play several turns and check that the token positions, the pile and the dice results agree.
@@ -142,6 +172,7 @@ Each game is its own branch with its own PR in its own repo. Don't open PRs unle
 ## Done when
 
 - [ ] All three games have a 3D view that plays a full game, online and on one device, with 2D still working.
+- [ ] Every copy is updated: Pages repo, `play/` (rebuilt by `build-play.py`), and the claude.ai artifacts (3D via cdnjs, or clearly 2D only).
 - [ ] 3D and 2D players can share a room.
 - [ ] The 3D setting saves, the fallbacks work, and reduced motion is respected.
 - [ ] First paint is no slower than now. Each game's 3D extras total under about 2 MB.
@@ -150,6 +181,6 @@ Each game is its own branch with its own PR in its own repo. Don't open PRs unle
 
 ## Decisions the user still needs to make
 
-1. **Default:** should 3D start On on capable devices (the plan assumes yes), or Off until turned on?
+1. **Default:** the plan now ships 3D Off at first and flips to On after the checkpoint (step 4). The user can choose On from the start instead.
 2. **Look:** chunky toy-like pieces (the plan assumes this) or realistic. Gemini round 1 settles it.
 3. **President & Peasant hand:** keep the hand 2D (recommended for phones) or put it in 3D too?
