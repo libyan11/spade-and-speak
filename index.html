@@ -17,6 +17,7 @@ try { const q = new URLSearchParams(location.search).get('look'); if (/^[abcd]$/
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Lilita+One&display=swap" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Lilita+One&display=swap"></noscript>
 <script>/* connection tools load in the background, so the page shows at once; room actions wait for NET */window.NET=Promise.all(['vendor/peerjs-1.5.4.min.js','vendor/mqtt-5.10.1.min.js'].map(function(s){return new Promise(function(r){var e=document.createElement('script');e.src=s;e.async=false;e.onload=e.onerror=function(){r()};document.head.appendChild(e)})})).then(function(){window.NET_DONE=1});</script>
+<script>/* Game Night mode: only on night links */if(/[?&]night=/.test(location.search))document.write('<script src="/night.js"><\/script>')</script>
 <style>
 /* Layout: ring board on the left, turn panel on the right; turns play on a full-screen stage on every phone */
 :root {
@@ -1242,6 +1243,7 @@ function broadcast() {
     if (c.open && c.pid) { try { c.send({ t: 'state', state: publicState(c.pid), remainingMs: rem, hs: hostSess, sv }); } catch (e) {} }
   });
   LS && setItem(LS, 'sps-host', S);
+  if (role === 'host' && window.GN) GN.report(S.phase === 'win' && S.winner != null ? S.players.map(p => ({ name: p.name, place: p.team === S.winner ? 0 : 1 })) : null);
   dirPost();
   render();
 }
@@ -2347,7 +2349,7 @@ const UI = {
   create() {
     if (!readName()) return;
     if (typeof Peer === 'undefined' && typeof mqtt === 'undefined') { homeMsg = "Couldn't load the connection library. Check your internet and reload."; homeErr = true; renderHome(); return; }
-    role = 'host'; roomCode = newCode(); S = newLobby(roomCode);
+    role = 'host'; roomCode = (window.GN && GN.code()) || newCode(); S = newLobby(roomCode);
     openHostPeer(); startHostRelay(); broadcast();
   },
   resumeHost() {
@@ -2451,7 +2453,7 @@ document.addEventListener('keydown', e => {
   else if (k === 's') doAct('skip');
   else if (k === 'b') doAct('useParked');
 });
-window.addEventListener('beforeunload', e => { if (role === 'host' && S && S.phase !== 'lobby' && conns.size) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if (role === 'host' && S && S.phase !== 'lobby' && conns.size && !window.GN_LEAVING) { e.preventDefault(); e.returnValue = ''; } });
 
 /* ---------- boot ---------- */
 (function boot() {
@@ -2460,6 +2462,7 @@ window.addEventListener('beforeunload', e => { if (role === 'host' && S && S.pha
   render();
   NET.then(() => {
     if (role) return;
+    if (window.GN && GN.code()) { myName = GN.name(); if ($('#myName')) $('#myName').value = myName; if (GN.isHost()) UI.create(); else joinRoom(GN.code()); return; }
     dirWatch();
     if (myName && savedGuest && savedGuest.code && (!hashCode || hashCode === savedGuest.code) && (typeof Peer !== 'undefined' || typeof mqtt !== 'undefined')) joinRoom(savedGuest.code);
   });
